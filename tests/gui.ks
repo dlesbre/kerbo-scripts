@@ -1,6 +1,6 @@
 // #include "../libs/gui.ks"
 
-run "../libs/gui.ks".
+run "0:libs/gui".
 
 set logger to create_gui(
   list(
@@ -12,9 +12,11 @@ set logger to create_gui(
     lexicon("type", "popup", "name", "ex", "label", "AA", "choices", list("AA", "BB", "CC")),
     lexicon("type", "popup", "name", "ex2", "choices", list("AA", "BB", "CC")),
     lexicon("type", "radio", "name", "runway", "label", "Runway", "choices", list("Runway 90", "Runway 270"))
-  )
+  ),
+  list("Status", "Altitude", "Speed")
 ).
 logger:gui:show().
+logger:update_readouts(lexicon("Status", "Working", "Speed", 1000)).
 
 logger:log("hello").
 logger:debug("fidge").
