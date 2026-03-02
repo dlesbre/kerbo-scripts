@@ -35,6 +35,30 @@ function unlock {
 	sas on.
 }
 
+function log_stage {
+	parameter n.
+	logger:log("Stage " + n).
+	on stage:number log_stage(n+1).
+}
+
+function deploy_fairings {
+	local fairing_bases is list().
+	for fairing in Ship:ModulesNamed("ProceduralFairingBase") { // removes interstage fairings
+		if fairing:part:title:matchespattern("^FB") {
+			fairing_bases:add(fairing).
+		}
+	}
+	if fairing_bases:length = 1 { // only one fairing base
+		for child in fairing_bases[0]:part:children {
+			if child:hasmodule("ProceduralFairingSide") {
+				child:getmodule("ProceduralFairingDecoupler"):doaction("jettison fairing", true).
+			}
+		}
+	}
+	else
+		logger:log("Only supports one fairing: found " + fairing_bases:length).
+}
+
 function main {
 	set logger to create_gui(
 		list(
@@ -49,36 +73,34 @@ function main {
 		),
 		list("Orbit", "Pitch", "AoP", "TWR")
 	).
+	logger:set_settings(lexicon("drop_fairings", true)).
 	logger:gui:show().
 
 	local speed_of_sound is 350.
 	local tower_clear_alt is ship:bounds:bottomaltradar + ship:bounds:size:mag.
 
 	// Logging triggers
-	when ship:bounds:bottomaltradar > tower_clear_alt then
-		logger:log("Tower cleared").
-	when ship:airspeed > speed_of_sound then
-		logger:log("Vessel supersonic").
-	when ship:airspeed > 2*speed_of_sound then
-		logger:log("Mach 2").
-	when ship:airspeed > 3*speed_of_sound then
-		logger:log("Mach 3").
-	when ship:altitude > 1_000 then
-		logger:log("Altitude 1 km").
-	when ship:altitude > 10_000 then
-		logger:log("Altitude 10 km").
-	when ship:altitude > 20_000 then
-		logger:log("Altitude 20 km").
-	when ship:altitude > 40_000 then
-		logger:log("Altitude 40 km").
-	when ship:altitude > 70_000 then
-		logger:log("Altitude 70 km").
-	when ship:altitude > 100_000 then
-		logger:log("Altitude 100 km - Karman line").
-	when ship:altitude > 140_000 then
-		logger:log("Altitude 140 km - Left the atmosphere").
-	on stage {
-		logger:log("Stage").
+	when ship:bounds:bottomaltradar > tower_clear_alt then logger:log("Tower cleared").
+	when ship:airspeed > 100 then logger:log("Passing 100 m/s").
+	when ship:airspeed > speed_of_sound then logger:log("Vessel supersonic").
+	when ship:airspeed > 2*speed_of_sound then logger:log("Mach 2").
+	when ship:airspeed > 3*speed_of_sound then logger:log("Mach 3").
+	when ship:velocity:orbit:mag > 2500 then logger:log("Passing 2.5 km/s").
+	when ship:velocity:orbit:mag > 5000 then logger:log("Passing 5 km/s").
+	when ship:altitude > 1_000 then	logger:log("Altitude 1 km").
+	when ship:altitude > 10_000 then logger:log("Altitude 10 km").
+	when ship:altitude > 20_000 then logger:log("Altitude 20 km").
+	when ship:altitude > 40_000 then logger:log("Altitude 40 km").
+	when ship:altitude > 70_000 then logger:log("Altitude 70 km").
+	when ship:altitude > 100_000 then logger:log("Altitude 100 km - Karman line").
+	when ship:altitude > 140_000 then logger:log("Altitude 140 km - Left the atmosphere").
+	on stage:number log_stage(0).
+	when orbit:periapsis > 140_000 then logger:log("Achieved orbit").
+	when ship:altitude > 50_000 then {
+		if logger:get_settings():drop_fairings {
+			deploy_fairings().
+			logger:log("Fairing jettison").
+		}
 	}
 
 	lock TWR to max(.001, ship:maxthrust/(ship:mass*g)).
