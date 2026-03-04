@@ -71,7 +71,7 @@ function main {
 			lexicon("type", "checkbox", "name", "drop_fairings", "label", "Auto-deploy fairings"),
 			lexicon("name", "Unlock controls", "onclick", unlock@, "type", "button")
 		),
-		list("Orbit", "Pitch", "AoP", "TWR")
+		list("Orbit", "Pitch", "AoP", "TWR", "Q")
 	).
 	logger:set_settings(lexicon("drop_fairings", true)).
 	logger:gui:show().
@@ -104,14 +104,24 @@ function main {
 	}
 
 	lock TWR to max(.001, ship:maxthrust/(ship:mass*g)).
-
+	local max_q is dynamic_pressure().
+	local max_q_t is missionTime.
 	until false {
-
+		local cur_q is dynamic_pressure().
+		if (cur_q > max_q) {
+			set max_q to cur_q.
+			set max_q_t to missionTime.
+		}
+		else if (max_q_t > 0 and missionTime - max_q_t > 0.5 ) {
+			logger:log("Passed max Q = " + format_unit(max_q, " ") + "Pa").
+			set max_q_t to -1.
+		}
 		logger:update_readouts(lexicon(
 			"Orbit", format_unit(orbit:apoapsis) + "m x " + format_unit(orbit:periapsis) + "m",
 			"Pitch", round(vector_pitch(ship:facing:forevector), 1) + "°",
 			"AoP", round(vang(ship:facing:forevector, ship:velocity:surface),1) + "°",
-			"TWR", round(TWR,2)
+			"TWR", round(TWR,2),
+			"Q", format_unit(cur_q) + "Pa"
 		)).
 		wait 0.1.
 	}
