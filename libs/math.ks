@@ -56,11 +56,12 @@ function orbit_speed_at {
 set get_constant to 8.31446261815324.
 
 // This is only an estimate because P/T do not only depend on altitude
+// https://en.wikipedia.org/wiki/Dynamic_pressure
 function dynamic_pressure {
 	local alti is ship:altitude.
 	local pressure is body:atm:altitudePressure(alti) * constant:atmtokpa.
 	local temperature is body:atm:altitudeTemperature(alti).
-
+	if temperature = 0 return 0.
 	local density is 1000 * body:atm:molarmass * pressure / (get_constant * temperature).
 	return density * ship:velocity:surface:mag^2 / 2.
 }
