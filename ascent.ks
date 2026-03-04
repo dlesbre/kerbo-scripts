@@ -69,11 +69,12 @@ function main {
 				lexicon("type", "input", "name", "pe", "label", "Periapsis:", "tooltip", "200", "unit", "km"),
 				lexicon("type", "input", "name", "ap", "label", "Apoapsis:", "tooltip", "800", "unit", "km"))),
 			lexicon("type", "checkbox", "name", "drop_fairings", "label", "Auto-deploy fairings"),
+			lexicon("type", "checkbox", "name", "log_telemetry", "label", "Log telemetry"),
 			lexicon("name", "Unlock controls", "onclick", unlock@, "type", "button")
 		),
 		list("Orbit", "Pitch", "AoP", "TWR", "Q")
 	).
-	logger:set_settings(lexicon("drop_fairings", true)).
+	logger:set_settings(lexicon("drop_fairings", true, "log_telemetry", false)).
 	logger:gui:show().
 
 	local speed_of_sound is 350.
@@ -106,6 +107,7 @@ function main {
 	lock TWR to max(.001, ship:maxthrust/(ship:mass*g)).
 	local max_q is dynamic_pressure().
 	local max_q_t is missionTime.
+	local log_telemetry_t is -1.
 	until false {
 		local cur_q is dynamic_pressure().
 		if (cur_q > max_q) {
@@ -124,6 +126,19 @@ function main {
 			"Q", format_unit(cur_q) + "Pa"
 		)).
 		wait 0.1.
+
+		// Log telemetry on launch and then every 10 seconds.
+		if (missionTime > 0 and log_telemetry_t < 0) or (missionTime - log_telemetry_t >= 10) {
+			set log_telemetry_t to missionTime.
+			if logger:get_settings():log_telemetry {
+				logger:debug(
+					"Alt: " + format_unit(altitude) +
+					"m, SV: " + format_unit(ship:velocity:surface:mag) +
+					"m/s, OV: " + format_unit(ship:velocity:orbit:mag) +
+					"m/s, Pitch: " + round(vector_pitch(ship:facing:forevector), 1) +
+					"°, Hdg: " + round(ship:heading, 1) + "°").
+			}
+		}
 	}
 }
 
