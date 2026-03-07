@@ -20,9 +20,10 @@ function linear_interpolation {
 
 function vector_heading{
 	parameter vector.
-	set a1 to vdot(ship:up:vector,vector)*vector:normalized.
-	set a2 to vector-a1.
-	return vang(ship:north:vector,a2).
+	local east is vcrs(up:vector, north:vector).
+	local north_component is vdot(north:vector:normalized, vector).
+	local east_component is vdot(east:normalized, vector).
+	return mod(arcTan2(east_component, north_component)+360, 360).
 }
 
 function vector_pitch{
@@ -64,4 +65,23 @@ function dynamic_pressure {
 	if temperature = 0 return 0.
 	local density is 1000 * body:atm:molarmass * pressure / (get_constant * temperature).
 	return density * ship:velocity:surface:mag^2 / 2.
+}
+
+// Or 180 - x
+function absolute_launch_azimuth {
+	parameter inc.
+	if abs(latitude) > abs(inc)
+		return 90.
+	return mod(arcsin(cos(inc) / cos(latitude)), 360).
+}
+
+function launch_azimuth {
+	parameter inc.
+	parameter pe is 200.
+	parameter ap is pe.
+
+	local azimuth is absolute_launch_azimuth(inc).
+	local orbital_velocity is heading(azimuth, 0, 0):vector.
+	set orbital_velocity:mag to orbit_speed_at(pe,pe,ap).
+	return vector_heading(orbital_velocity - ship:orbit:velocity:orbit).
 }

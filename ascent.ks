@@ -59,29 +59,52 @@ function deploy_fairings {
 		logger:log("Only supports one fairing: found " + fairing_bases:length).
 }
 
+function set_min_incl {
+	logger:set_settings(lexicon("orbit", lexicon("inc", ceiling(latitude,4)))).
+}
+
 function main {
+	local inc is ceiling(latitude,4).
+	local pe is 200.
+	local ap is 200.
 	set logger to create_gui(
 		list(
 			lexicon("type", "vbox", "name", "grav_turn", "label", "Gravity turn", "widgets", list(
 				lexicon("type", "input", "name", "alt", "label", "Turn start alt:", "tooltip", "1000", "unit", "m"),
 				lexicon("type", "input", "name", "angle", "label", "Turn start angle:", "tooltip", "5", "unit", "°"))),
 			lexicon("type", "vbox", "name", "orbit", "label", "Orbit", "widgets", list(
-				lexicon("type", "input", "name", "pe", "label", "Periapsis:", "tooltip", "200", "unit", "km"),
-				lexicon("type", "input", "name", "ap", "label", "Apoapsis:", "tooltip", "800", "unit", "km"))),
+				lexicon("type", "input", "name", "pe", "label", "Periapsis:", "tooltip", pe, "unit", "km"),
+				lexicon("type", "input", "name", "ap", "label", "Apoapsis:", "tooltip", ap, "unit", "km"),
+				lexicon("type", "hlayout", "name", "", "widgets", list(
+					lexicon("type", "input", "name", "inc", "label", "Inclination:", "tooltip", inc, "unit", "°"),
+					lexicon("type", "button", "name", "min_incl", "label", "cur", "onclick", set_min_incl@)
+				)),
+				lexicon("type", "label", "name", "inc_info", "label", "Launch azimuth: "))),
 			lexicon("type", "checkbox", "name", "drop_fairings", "label", "Auto-deploy fairings"),
 			lexicon("type", "checkbox", "name", "log_telemetry", "label", "Log telemetry"),
+			lexicon("type", "input", "name", "shutdown_pe", "label", "Shutdown when Pe >", "tooltip", "150", "unit", "km"),
 			lexicon("name", "Unlock controls", "onclick", unlock@, "type", "button")
 		),
-		list("Orbit", "Pitch", "AoP", "TWR", "Q")
+		list("Orbit", "Pitch", "AoP", "TWR", "Azimuth")
 	).
-	logger:set_settings(lexicon("drop_fairings", true, "log_telemetry", false)).
+	logger:set_settings(lexicon(
+		"drop_fairings", true,
+		"log_telemetry", false,
+		"orbit", lexicon("pe", pe, "ap", ap, "inc", inc, "inc_info", "Launch azimuth: 90°")
+	)).
 	logger:gui:show().
 
 	local speed_of_sound is 350.
 	local tower_clear_alt is ship:bounds:bottomaltradar + ship:bounds:size:mag.
 
+	// Vessel is locked upward until tower is cleared.
+	local tower_cleared is false.
+
 	// Logging triggers
-	when ship:bounds:bottomaltradar > tower_clear_alt then logger:log("Tower cleared").
+	when ship:bounds:bottomaltradar > tower_clear_alt then {
+		set tower_cleared to true.
+		logger:log("Tower cleared").
+	}
 	when ship:airspeed > 100 then logger:log("Passing 100 m/s").
 	when ship:airspeed > speed_of_sound then logger:log("Vessel supersonic").
 	when ship:airspeed > 2*speed_of_sound then logger:log("Mach 2").
@@ -96,7 +119,7 @@ function main {
 	when ship:altitude > 100_000 then logger:log("Altitude 100 km - Karman line").
 	when ship:altitude > 140_000 then logger:log("Altitude 140 km - Left the atmosphere").
 	on stage:number log_stage(0).
-	when orbit:periapsis > 140_000 then logger:log("Achieved orbit").
+	when orbit:periapsis > 140_000 then	logger:log("Achieved orbit").
 	when ship:altitude > 50_000 then {
 		if logger:get_settings():drop_fairings {
 			deploy_fairings().
@@ -108,13 +131,30 @@ function main {
 	local max_q is dynamic_pressure().
 	local max_q_t is missionTime.
 	local log_telemetry_t is -1.
+	local settings_t is 0.
+
+	// Settings
+	local settings is logger:get_settings.
+	local pe_shutdown is -1.
+	local check_cutoff is true.
+
+
 	until false {
+		// refresh settings every second
+		if (time:seconds - settings_t > 1) {
+			set settings to logger:get_settings().
+			set pe_shutdown to settings:shutdown_pe:toscalar(-1) * 1000.
+			set pe to settings:orbit:pe:toscalar(pe).
+			set ap to settings:orbit:ap:toscalar(ap).
+			set inc to settings:orbit:inc:toscalar(inc).
+		}
+
 		local cur_q is dynamic_pressure().
 		if (cur_q > max_q) {
 			set max_q to cur_q.
 			set max_q_t to missionTime.
 		}
-		else if (max_q_t > 0 and missionTime - max_q_t > 0.5 ) {
+		else if (max_q_t > 0 and missionTime - max_q_t > 0.5) {
 			logger:log("Passed max Q = " + format_unit(max_q, " ") + "Pa").
 			set max_q_t to -1.
 		}
@@ -123,13 +163,21 @@ function main {
 			"Pitch", round(vector_pitch(ship:facing:forevector), 1) + "°",
 			"AoP", round(vang(ship:facing:forevector, ship:velocity:surface),1) + "°",
 			"TWR", round(TWR,2),
-			"Q", format_unit(cur_q) + "Pa"
+			"Azimuth", "" + round(absolute_launch_azimuth(inc),1) + "° or " + round(launch_azimuth(inc),1)
 		)).
-		wait 0.1.
+
+
+		if pe_shutdown > 0 and periapsis > pe_shutdown and check_cutoff {
+			// set ship:control:mainthrottle to 0.
+			set ship:control:pilotmainthrottle to 0.
+			set check_cutoff to false.
+			logger:log("Engine cut-off: " + format_unit(orbit:apoapsis) + "m x " + format_unit(orbit:periapsis) + "m").
+		}
 
 		// Log telemetry on launch and then every 10 seconds.
 		if (missionTime > 0 and log_telemetry_t < 0) or (missionTime - log_telemetry_t >= 10) {
 			set log_telemetry_t to missionTime.
+			set settings to logger:get_settings().
 			if logger:get_settings():log_telemetry {
 				logger:debug(
 					"Alt: " + format_unit(altitude) +
@@ -139,6 +187,8 @@ function main {
 					"°, Hdg: " + round(ship:heading, 1) + "°").
 			}
 		}
+
+		wait 0.001.
 	}
 }
 
