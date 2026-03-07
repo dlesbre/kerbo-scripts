@@ -79,23 +79,26 @@ function main {
       if (ship:status = "Landed") {
         logger:log("Touchdown").
         set timer to time:seconds().
+        set ship:control:yaw to 0.
         for flap in flaps {
           flap:doaction("increase flap deflection", true).
           flap:doaction("increase flap deflection", true).
         }
       }
       if (ship:status = "Flying" and p_status = "Landed") {
+        set ship:control:neutralize to true.
         logger:log("Bounce").
         brakes off.
       }
       set p_status to ship:status.
     }
-    if (p_status = "Landed" and time:seconds() - timer > 1) {
+    if (p_status = "Landed" and time:seconds() - timer > 1 and not brakes) {
       logger:log("Engaging brakes").
       brakes on.
     }
-    if (ship:airspeed = 0) {
+    if (ship:airspeed < 0.1) {
       logger:log("<b>Landing complete</b>").
+      set ship:control:neutralize to true.
       break.
     }
 

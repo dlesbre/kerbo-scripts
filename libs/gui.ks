@@ -66,6 +66,13 @@ function update_readouts {
   }
 }
 
+function merge_lexicons {
+  parameter parent.
+  parameter child.
+  for k in child:keys
+    set parent[k] to child[k].
+}
+
 // Settings are specified via a list of lexicon with the following keys
 // name: String, setting variable name
 // label: String, pretty description, may be omitted for "popup"
@@ -107,6 +114,8 @@ function create_settings {
       set setting_widgets[setting:name] to widget.
       if setting:haskey("onclick") set widget:onclick to setting:onclick.
     }
+    else if setting:type = "label"
+      set setting_widgets[setting:name] to vbox:addlabel(label).
     else if setting:type = "input" {
       local widget is vbox:addhlayout().
       local label_widget is widget:addlabel(label).
@@ -114,7 +123,7 @@ function create_settings {
       local text_widget is widget:addtextfield("").
       set text_widget:style:hstretch to true.
       set text_widget:style:align to choose setting:align if setting:haskey("align") else "right".
-      if setting:haskey("tooltip") { set text_widget:tooltip to setting:tooltip. }
+      if setting:haskey("tooltip") { set text_widget:tooltip to setting:tooltip:tostring(). }
       if setting:haskey("unit") { widget:addlabel(setting:unit). }
       set setting_widgets[setting:name] to text_widget.
     }
@@ -140,10 +149,18 @@ function create_settings {
       for choice in setting:choices { widget:addradiobutton(choice, false). }
       set setting_widgets[setting:name] to widget.
     }
-    else if setting:type = "vbox" {
-      local vbox is vbox:addvbox().
-      if setting:haskey("label") set setting_widgets[setting:name] to create_settings(vbox, setting:widgets, label).
-      else set setting_widgets[setting:name] to create_settings(vbox, setting:widgets, "").
+    else if setting:type = "vbox" or setting:type = "hbox" or setting:type = "hlayout" or setting:type = "vlayout" {
+      local box is
+        choose vbox:addvbox() if setting:type = "vbox" else
+        choose vbox:addhbox() if setting:type = "hbox" else
+        choose vbox:addhlayout() if setting:type = "hlayout" else vbox:addvlayout().
+      local sub_settings is
+        choose create_settings(box, setting:widgets, label)
+        if setting:haskey("label")
+        else create_settings(box, setting:widgets, "").
+      if setting:name <> ""
+        set setting_widgets[setting:name] to sub_settings.
+      else merge_lexicons(setting_widgets, sub_settings).
     }
     else print "Error: unknown setting:type '" + setting:type + "'".
   }
@@ -157,8 +174,8 @@ function set_settings {
     local widget is setting_widgets[key].
     if widget:typename = "checkbox" or widget:typename = "button"
       set widget:pressed to values[key].
-    else if widget:typename = "textfield"
-      set widget:text to values[key].
+    else if widget:typename = "textfield" or widget:typename = "label"
+      set widget:text to values[key]:tostring().
     else if widget:typename = "popupmenu" {
       local index is widget:options:find(values[key]).
       set widget:index to index.
@@ -188,7 +205,7 @@ function get_settings {
   for key in setting_widgets:keys() {
     local widget is setting_widgets[key].
     if widget:typename = "checkbox" or widget:typename = "button" set result[key] to widget:pressed.
-    else if widget:typename = "textfield" set result[key] to widget:text.
+    else if widget:typename = "textfield" or widget:typename = "label" set result[key] to widget:text.
     else if widget:typename = "popupmenu" set result[key] to widget:value.
     else if widget:typename = "lexicon" set result[key] to get_settings(widget).
     else if widget:typename = "box" set result[key] to widget:radiovalue.
