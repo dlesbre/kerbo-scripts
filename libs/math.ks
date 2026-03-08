@@ -31,6 +31,22 @@ function vector_pitch{
 	return 90-vang(ship:up:vector,vector).
 }
 
+// vector_orthogonal(v1,v2) returns a vector orthogonal to v1 in the plane of v1,v2
+function vector_orthogonal{
+	parameter v1, v2.
+	return vcrs(vcrs(v1,v2), v1).
+}
+
+// vector_clamp(v1, v2, ang) is the vector closest to v2 whose max angle to v1 is ang.
+function vector_clamp{
+	parameter v1, v2, ang.
+	set v1 to v1:normalized.
+	set v2 to v2:normalized.
+	local t_ang is vang(v1,v2).
+	if t_ang <= ang return v2.
+	return cos(ang)*v1 + sin(ang)*vector_orthogonal(v1,v2).
+}
+
 function orbit_from_ap_pe {
 	parameter pe.
 	parameter ap.

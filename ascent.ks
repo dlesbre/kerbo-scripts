@@ -5,24 +5,6 @@ run once "0:/libs/gui".
 lock g to earth:mu / (altitude + earth:radius)^2.
 lock TWR to max(.001, ship:maxthrust/(ship:mass*g)).
 
-global message is " ".
-global message2 is " ".
-
-function flightreadout{
-	print "======= Flight Computer =======" at (0,0).
-	print "Vessel Status: " + status + "                             " at (2,1).
-	print "Current TWR:   " + round(twr,2) + "     "         at (2,2).
-	print "Current Mass:  " + round(ship:mass) + " t     "  at (2,3).
-	print "Current Accel: " + round(twr*g,2) + " m/s^2     " at (2,4).
-	print "Heading:       " + round(vector_heading(ship:velocity:surface),2) + "°     "  at (2,5).
-  print "Pitch:         " + round(vector_pitch(ship:velocity:surface),2) + "°     "  at (2,6).
-	print "Current Vel:   " + round(ship:airspeed,2) + " m/s     " at (2,7).
-	print "Current DV:    " + round(stage:deltav:current,2) + " m/s     " at (2,8).
-  print "Remaining burn:" + round(stage:deltav:duration,2) + " s     " at (2,9).
-	print message + "                      " at (0,10).
-	print message2 + "                     " at (0,11).
-}.
-
 set logger to "".
 
 function unlock {
@@ -35,9 +17,20 @@ function unlock {
 	sas on.
 }
 
+set stage_names to list(
+	"Engine ignition",
+	"Liftoff",
+	"Booster separation",
+	"First stage separation",
+	"Second stage Ignition",
+	"Payload release"
+).
+
 function log_stage {
 	parameter n.
-	logger:log("Stage " + n).
+	if n < stage_names:length
+		logger:log(stage_names[n]).
+	else logger:log("Stage " + n).
 	on stage:number log_stage(n+1).
 }
 
@@ -63,15 +56,39 @@ function set_min_incl {
 	logger:set_settings(lexicon("orbit", lexicon("inc", ceiling(latitude,4)))).
 }
 
+function pp_attitude {
+	parameter value.
+	parameter command.
+	local str is round(value,1):tostring.
+	if abs(command - value) > 2 return "<color=red>" + str + "</color>/" + round(command,1).
+	if abs(command - value) > 1 return "<color=orange>" + str + "</color>/" + round(command,1).
+	local cmd_str is round(command,1).
+	if str = cmd_str return str.
+	return str + "/" + round(command,1).
+}
+
 function main {
+	local cmd_pitch is 90.
+	local cmd_hdg is 90.
+	local cmd_roll is 90.
+	lock cmd_dir to ship:facing.
+	local active is true.
+
 	local inc is ceiling(latitude,4).
 	local pe is 200.
 	local ap is 200.
+	local turn_velocity is 50.
+	local turn_angle is 10.
+	local extra_pitch is 1.
+
+	local state is "Prelaunch".
+
 	set logger to create_gui(
 		list(
 			lexicon("type", "vbox", "name", "grav_turn", "label", "Gravity turn", "widgets", list(
-				lexicon("type", "input", "name", "alt", "label", "Turn start alt:", "tooltip", "1000", "unit", "m"),
-				lexicon("type", "input", "name", "angle", "label", "Turn start angle:", "tooltip", "5", "unit", "°"))),
+				lexicon("type", "input", "name", "vel", "label", "Turn start speed:", "tooltip", turn_velocity, "unit", "m/s"),
+				lexicon("type", "input", "name", "angle", "label", "Turn start angle:", "tooltip", turn_angle, "unit", "°"),
+				lexicon("type", "input", "name", "pitch", "label", "Pitch from prograde:", "tooltip", extra_pitch, "unit", "°"))),
 			lexicon("type", "vbox", "name", "orbit", "label", "Orbit", "widgets", list(
 				lexicon("type", "input", "name", "pe", "label", "Periapsis:", "tooltip", pe, "unit", "km"),
 				lexicon("type", "input", "name", "ap", "label", "Apoapsis:", "tooltip", ap, "unit", "km"),
@@ -85,14 +102,32 @@ function main {
 			lexicon("type", "input", "name", "shutdown_pe", "label", "Shutdown when Pe >", "tooltip", "150", "unit", "km"),
 			lexicon("name", "Unlock controls", "onclick", unlock@, "type", "button")
 		),
-		list("Orbit", "Pitch", "AoP", "TWR", "Azimuth")
+		list("Orbit", "P,H,R", "AoP", "TWR", "Status")
 	).
 	logger:set_settings(lexicon(
 		"drop_fairings", true,
 		"log_telemetry", false,
+		"grav_turn", lexicon("vel", turn_velocity, "angle", turn_angle, "pitch", extra_pitch),
 		"orbit", lexicon("pe", pe, "ap", ap, "inc", inc, "inc_info", "Launch azimuth: 90°")
 	)).
 	logger:gui:show().
+
+	set on_switch to logger:panel:addbutton("Engage autopilot").
+	set on_switch:style:align to "center".
+	set on_switch:style:hstretch to true.
+	set on_switch:toggle to true.
+	set on_switch:onclick to {
+		if on_switch:pressed {
+			if active {
+				sas off.
+				lock steering to cmd_dir.
+			}
+		}
+		else {
+			sas on.
+			unlock steering.
+		}
+	}.
 
 	local speed_of_sound is 350.
 	local tower_clear_alt is ship:bounds:bottomaltradar + ship:bounds:size:mag.
@@ -147,6 +182,13 @@ function main {
 			set pe to settings:orbit:pe:toscalar(pe).
 			set ap to settings:orbit:ap:toscalar(ap).
 			set inc to settings:orbit:inc:toscalar(inc).
+			set turn_angle to settings:grav_turn:angle:toscalar(turn_angle).
+			set turn_velocity to settings:grav_turn:vel:toscalar(turn_velocity).
+			set extra_pitch to settings:grav_turn:pitch:toscalar(extra_pitch).
+			set cmd_hdg to launch_azimuth(inc).
+			logger:set_settings(lexicon(
+				"orbit", lexicon("inc_info", "Launch azimuth: " + round(cmd_hdg,1) + "°")
+			)).
 		}
 
 		local cur_q is dynamic_pressure().
@@ -158,12 +200,20 @@ function main {
 			logger:log("Passed max Q = " + format_unit(max_q, " ") + "Pa").
 			set max_q_t to -1.
 		}
+
+		local true_pitch is vector_pitch(ship:facing:forevector).
+		// Roll is undefined if facing roof
+		local roll_up is vector_orthogonal(ship:facing:forevector, up:vector).
+		local roll is choose vang(ship:facing:topvector, roll_up) if roll_up:mag > 0 else cmd_roll.
 		logger:update_readouts(lexicon(
-			"Orbit", format_unit(orbit:apoapsis) + "m x " + format_unit(orbit:periapsis) + "m",
-			"Pitch", round(vector_pitch(ship:facing:forevector), 1) + "°",
+			"Orbit", format_unit(orbit:apoapsis) + "m x " + format_unit(orbit:periapsis) + "m @ " + round(orbit:inclination,2) + "°",
+			"P,H,R",
+				"" + pp_attitude(true_pitch, cmd_pitch) +
+				", " + pp_attitude(choose vector_heading(ship:facing:forevector) if abs(90 - true_pitch) > 0.01 else cmd_hdg, cmd_hdg) +
+				", " + pp_attitude(roll, cmd_roll),
 			"AoP", round(vang(ship:facing:forevector, ship:velocity:surface),1) + "°",
 			"TWR", round(TWR,2),
-			"Azimuth", "" + round(absolute_launch_azimuth(inc),1) + "° or " + round(launch_azimuth(inc),1)
+			"Status", state
 		)).
 
 
@@ -172,6 +222,32 @@ function main {
 			set ship:control:pilotmainthrottle to 0.
 			set check_cutoff to false.
 			logger:log("Engine cut-off: " + format_unit(orbit:apoapsis) + "m x " + format_unit(orbit:periapsis) + "m").
+		}
+
+		if missionTime > 0 and state = "Prelaunch" {
+			set state to "Vertical ascent".
+			lock cmd_dir to ship:facing.
+		}
+		if tower_cleared and state = "Vertical ascent" {
+			set state to "Roll program".
+			lock cmd_dir to heading(cmd_hdg, cmd_pitch, 360-cmd_roll).
+		}
+		if state = "Roll program" and ship:velocity:surface:mag > turn_velocity {
+			set state to "Pitch program".
+			set cmd_pitch to 90 - turn_angle.
+			logger:log("Begining pitch program").
+		}
+		if state = "Pitch program" {
+			set cmd_pitch to clamp(vector_pitch(ship:velocity:surface)-extra_pitch, 45, 90-turn_angle).
+			if altitude > 50_000 {
+				logger:log("End guidance").
+				set active to false.
+				set on_switch:pressed to false.
+				set on_switch:enabled to false.
+				sas on.
+				unlock steering.
+				set state to "Manual flight".
+			}
 		}
 
 		// Log telemetry on launch and then every 10 seconds.

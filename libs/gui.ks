@@ -226,6 +226,8 @@ function create_gui {
 
   local main_gui is GUI(width, height + readouts_height).
   set main_gui:draggable to true.
+  set main_gui:x to 120. // Window in top left
+  set main_gui:y to 75.
 
   local contents is main_gui:addhlayout().
 
@@ -236,14 +238,21 @@ function create_gui {
 
   local settings_widget is create_settings(right_panel, settings).
 
-  local title is left_panel:addlabel("<b>Flight computer</b>").
+  local tbox is left_panel:addhlayout().
+  local title is tbox:addlabel("<b>    Flight computer</b>").
+  set title:style:hstretch to true.
+  local close is tbox:addbutton("<color=red>X</color>").
+  set close:style:width to 25.
+  set close:onclick to { set main_gui:visible to false. }.
+
+
   set title:style:align to "center".
   left_panel:addspacing(10).
 
   local readouts_box is left_panel:addvbox().
   set readouts_box:style:height to readouts_height.
-  set readouts_box:style:width to 250.
-  set readouts_box:style:margin:h to 40.
+  set readouts_box:style:width to 270.
+  set readouts_box:style:margin:h to 30.
   set readouts_box:style:padding:v to 5.
   local readout_widgets is create_readouts(readouts_box, readouts).
 
@@ -271,8 +280,14 @@ function create_gui {
 
   left_panel:addspacing(20).
 
-  local shutdown_btn is left_panel:addbutton("Shutdown autopilot").
-  set shutdown_btn:style:hstretch to true.
+  function toggle_gui_visibility {
+    if main_gui:visible main_gui:hide().
+    else main_gui:show().
+    on ag10 toggle_gui_visibility().
+  }
+  on ag10 toggle_gui_visibility().
+
+
 
   local vbox is scrollbox:AddVLayout().
   return lexicon(
@@ -280,6 +295,7 @@ function create_gui {
     // "scrollbox", scrollbox,
     // "vbox", vbox,
     // "settings", settings_widget,
+    "panel", left_panel:addvlayout(),
     "log", mlog@:bind(scrollbox, vbox, false, debug_labels, show_debug),
     "debug", mlog@:bind(scrollbox, vbox, true, debug_labels, show_debug),
     "set_settings", set_settings@:bind(settings_widget),
