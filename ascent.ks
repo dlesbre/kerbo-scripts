@@ -47,9 +47,19 @@ function deploy_fairings {
 				child:getmodule("ProceduralFairingDecoupler"):doaction("jettison fairing", true).
 			}
 		}
+		logger:log("Fairing jettison").
 	}
-	else
-		logger:log("Only supports one fairing: found " + fairing_bases:length).
+	else if fairing_bases:length > 0
+		logger:log("<color=orange>Only supports one fairing: found " + fairing_bases:length + "</color>").
+}
+
+function deploy_LES {
+	local LES is ship:partstitledpattern("Launch Escape System").
+	if LES:length = 1 {
+		LES[0]:getmodule("ModuleEnginesRF"):doaction("activate engine", true).
+		LES[0]:getmodule("ModuleDecouple"):doaction("decouple", true).
+		logger:log("Launch Escape System Jettison").
+	}
 }
 
 function set_min_incl {
@@ -158,7 +168,7 @@ function main {
 	when ship:altitude > 50_000 then {
 		if logger:get_settings():drop_fairings {
 			deploy_fairings().
-			logger:log("Fairing jettison").
+			deploy_LES().
 		}
 	}
 
