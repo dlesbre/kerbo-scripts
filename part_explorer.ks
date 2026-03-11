@@ -18,8 +18,13 @@ set subwindow to window:addvlayout().
 
 local part_list_box is subwindow:addstack().
 set part_list_box:style:vstretch to true.
-local part_scrollbox is part_list_box:addscrollbox().
+local part_list_vbox is part_list_box:addvlayout().
+local searchbar is part_list_vbox:addtextfield("").
+set searchbar:style:hstretch to true.
+set searchbar:tooltip to "Search".
+local part_scrollbox is part_list_vbox:addscrollbox().
 set part_scrollbox:style:vstretch to true.
+
 
 local part_details is subwindow:addstack().
 set part_details:style:vstretch to true.
@@ -128,6 +133,19 @@ for part in ship:parts {
   set btn:style:hstretch to true.
   set btn:onclick to part_info@:bind(part).
 }
+
+set searchbar:onchange to {
+  parameter text.
+  if text = "" {
+    for widget in vbox:widgets
+      set widget:visible to true.
+  }
+  else {
+    for widget in vbox:widgets
+      set widget:visible to widget:text:matchespattern(text).
+  }
+}.
+
 
 window:show().
 
