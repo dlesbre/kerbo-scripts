@@ -7,6 +7,10 @@ lock TWR to max(.001, ship:maxthrust/(ship:mass*g)).
 
 set logger to "".
 
+// TestFlight: ModuleEnginesRF
+// status = Failed
+// cause = Failed to ignite
+
 function unlock {
 	if logger:typename = "lexicon" {
 		logger:log("Unlocking controls").
@@ -15,6 +19,36 @@ function unlock {
 	unlock throttle.
 	set ship:control:pilotmainthrottle to 1.
 	sas on.
+}
+
+// Inspired by https://www.reddit.com/r/KerbalSpaceProgram/comments/jzk3kn/comment/gdc9gbu/
+local warp_margin is 300. // s
+function warp_to_LAN {
+	if status = "prelaunch" or status = "landed" {
+		local tlan is mod(360 + target:orbit:lan - body:rotationangle, 360).
+		local tldn is mod(tlan + 180, 360).
+		print tlan + " " + tldn.
+
+		local incl is max(ceiling(abs(latitude),4), round(target:orbit:inclination,4)).
+		local gamma is arcsin(cos(incl) / cos(latitude)).
+		local delta is arccos(cos(gamma) / sin(incl)).
+		if latitude < 0 set delta to -delta.
+
+		// Calculate differences between target and ship
+		local lon_diff_AN is mod(360 + tlan - longitude + delta, 360). // deg
+		local lon_diff_DN is mod(360 + tldn - longitude - delta, 360). // deg
+
+		local lon_diff is min(lon_diff_AN, lon_diff_DN). //DN first
+		local rot_rate is 360/BODY:ROTATIONPERIOD. // deg/s
+
+		local wait_time is lon_diff/rot_rate. // seconds
+		local margin is logger:get_settings():warp_margin:toscalar(warp_margin).
+		logger:log("Warping to " + (choose "LAN" if lon_diff_AN < lon_diff_DN else "LDN") + " in " + format_duration(wait_time)).
+
+		logger:set_settings(lexicon("orbit", lexicon("northbound", lon_diff_AN < lon_diff_DN, "inc", incl))).
+
+		kuniverse:timewarp:warpto(time:seconds + wait_time - margin).
+	}
 }
 
 set stage_names to list(
@@ -63,8 +97,15 @@ function deploy_LES {
 }
 
 function set_min_incl {
-	logger:set_settings(lexicon("orbit", lexicon("inc", ceiling(latitude,4)))).
+	logger:set_settings(lexicon("orbit", lexicon("inc", ceiling(abs(latitude),4)))).
 }
+
+function set_tgt_incl {
+	if hasTarget
+		logger:set_settings(lexicon("orbit", lexicon("inc", max(ceiling(abs(latitude),4), round(target:orbit:inclination,4))))).
+	else hudtext("No target selected", 3, 2, 30, red, true).
+}
+
 
 function pp_attitude {
 	parameter value.
@@ -77,6 +118,36 @@ function pp_attitude {
 	return str + "/" + round(command,1).
 }
 
+local altitude_triggers is list(
+	1_000, "",
+	10_000, "",
+	20_000, "",
+	40_000, "",
+	70_000, "",
+	100_000, "Karman Line",
+	140_000, "Left the atmosphere",
+	200_000, ""
+).
+
+
+local speed_of_sound is 350.
+
+local speed_triggers is list(
+	-100, "Passing 100 m/s",
+	-speed_of_sound, "Vessel supersonic",
+	-2*speed_of_sound, "Mach 2",
+	-3*speed_of_sound, "Mach 3",
+	2000, "Passing 2 km/s",
+	4000, "Passing 4 km/s",
+	6000, "Passing 6 km/s"
+).
+
+function above_speed {
+	parameter speed.
+	if speed < 0 return ship:airspeed >= - speed.
+	return ship:velocity:orbit:mag >= speed.
+}
+
 function main {
 	local cmd_pitch is 90.
 	local cmd_hdg is 90.
@@ -84,12 +155,13 @@ function main {
 	lock cmd_dir to ship:facing.
 	local active is true.
 
-	local inc is ceiling(latitude,4).
+	local inc is ceiling(abs(latitude),4).
 	local pe is 200.
 	local ap is 200.
 	local turn_velocity is 50.
 	local turn_angle is 10.
 	local extra_pitch is 1.
+
 
 	local state is "Prelaunch".
 
@@ -104,13 +176,18 @@ function main {
 				lexicon("type", "input", "name", "ap", "label", "Apoapsis:", "tooltip", ap, "unit", "km"),
 				lexicon("type", "hlayout", "name", "", "widgets", list(
 					lexicon("type", "input", "name", "inc", "label", "Inclination:", "tooltip", inc, "unit", "°"),
-					lexicon("type", "button", "name", "min_incl", "label", "cur", "onclick", set_min_incl@)
+					lexicon("type", "button", "name", "min_incl", "label", "cur", "onclick", set_min_incl@),
+					lexicon("type", "button", "name", "tgt_incl", "label", "tgt", "onclick", set_tgt_incl@)
 				)),
+				lexicon("type", "checkbox", "name", "Northbound"),
 				lexicon("type", "label", "name", "inc_info", "label", "Launch azimuth: "))),
 			lexicon("type", "checkbox", "name", "drop_fairings", "label", "Auto-deploy fairings"),
 			lexicon("type", "checkbox", "name", "log_telemetry", "label", "Log telemetry"),
 			lexicon("type", "input", "name", "shutdown_pe", "label", "Shutdown when Pe >", "tooltip", "150", "unit", "km"),
-			lexicon("name", "Unlock controls", "onclick", unlock@, "type", "button")
+			lexicon("type", "hlayout", "name", "", "widgets", list(
+				lexicon("type", "button", "name", "warp_btn", "label", "Warp to AN/DN", "onclick", warp_to_lan@),
+				lexicon("type", "input", "name", "warp_margin", "label", "margin", "unit", "s", "tooltip", warp_margin)
+			))
 		),
 		list("Orbit", "P,H,R", "AoP", "TWR", "Status")
 	).
@@ -118,11 +195,38 @@ function main {
 		"drop_fairings", true,
 		"log_telemetry", false,
 		"grav_turn", lexicon("vel", turn_velocity, "angle", turn_angle, "pitch", extra_pitch),
-		"orbit", lexicon("pe", pe, "ap", ap, "inc", inc, "inc_info", "Launch azimuth: 90°")
+		"orbit", lexicon("pe", pe, "ap", ap, "inc", inc, "inc_info", "Launch azimuth: 90°", "northbound", true),
+		"warp_margin", warp_margin
 	)).
 	logger:gui:show().
 
-	set on_switch to logger:panel:addbutton("Engage autopilot").
+	local pitch_input_val is 45.
+
+	local pitch_ctrl is logger:panel:addhlayout().
+	local pitch_lbl is pitch_ctrl:addlabel("Pitch:").
+	local pitch_btn_m10 is pitch_ctrl:addbutton("-10").
+
+	local pitch_btn_m1 is pitch_ctrl:addbutton("-1").
+	local pitch_input is pitch_ctrl:addtextfield("0").
+	set pitch_input:text to pitch_input_val:tostring().
+	set pitch_input:onchange to {
+		set pitch_input_val to pitch_input:text:toscalar(pitch_input_val).
+		set pitch_input:text to pitch_input_val:tostring().
+	}.
+	local pitch_btn_p1 is pitch_ctrl:addbutton("+1").
+	local pitch_btn_p10 is pitch_ctrl:addbutton("+10").
+
+	function change_pitch{ parameter amount.
+		set pitch_input_val to pitch_input_val + amount.
+		set pitch_input:text to pitch_input_val:tostring(). }
+	set pitch_btn_m10:onclick to change_pitch@:bind(-10).
+	set pitch_btn_m1:onclick to change_pitch@:bind(-1).
+	set pitch_btn_p1:onclick to change_pitch@:bind(1).
+	set pitch_btn_p10:onclick to change_pitch@:bind(10).
+	set pitch_ctrl:visible to false.
+
+
+	local on_switch is logger:panel:addbutton("Engage autopilot").
 	set on_switch:style:align to "center".
 	set on_switch:style:hstretch to true.
 	set on_switch:toggle to true.
@@ -139,7 +243,6 @@ function main {
 		}
 	}.
 
-	local speed_of_sound is 350.
 	local tower_clear_alt is ship:bounds:bottomaltradar + ship:bounds:size:mag.
 
 	// Vessel is locked upward until tower is cleared.
@@ -150,19 +253,7 @@ function main {
 		set tower_cleared to true.
 		logger:log("Tower cleared").
 	}
-	when ship:airspeed > 100 then logger:log("Passing 100 m/s").
-	when ship:airspeed > speed_of_sound then logger:log("Vessel supersonic").
-	when ship:airspeed > 2*speed_of_sound then logger:log("Mach 2").
-	when ship:airspeed > 3*speed_of_sound then logger:log("Mach 3").
-	when ship:velocity:orbit:mag > 2500 then logger:log("Passing 2.5 km/s").
-	when ship:velocity:orbit:mag > 5000 then logger:log("Passing 5 km/s").
-	when ship:altitude > 1_000 then	logger:log("Altitude 1 km").
-	when ship:altitude > 10_000 then logger:log("Altitude 10 km").
-	when ship:altitude > 20_000 then logger:log("Altitude 20 km").
-	when ship:altitude > 40_000 then logger:log("Altitude 40 km").
-	when ship:altitude > 70_000 then logger:log("Altitude 70 km").
-	when ship:altitude > 100_000 then logger:log("Altitude 100 km - Karman line").
-	when ship:altitude > 140_000 then logger:log("Altitude 140 km - Left the atmosphere").
+
 	on stage:number log_stage(0).
 	when orbit:periapsis > 140_000 then	logger:log("Achieved orbit").
 	when ship:altitude > 50_000 then {
@@ -171,6 +262,8 @@ function main {
 			deploy_LES().
 		}
 	}
+
+
 
 	lock TWR to max(.001, ship:maxthrust/(ship:mass*g)).
 	local max_q is dynamic_pressure().
@@ -181,8 +274,22 @@ function main {
 	// Settings
 	local settings is logger:get_settings.
 	local pe_shutdown is -1.
-	local check_cutoff is true.
 
+	when orbit:periapsis > pe_shutdown then {
+		if pe_shutdown > 0 {
+			set ship:control:pilotmainthrottle to 0.
+			logger:log("Engine cut-off: " + format_unit(orbit:apoapsis) + "m x " + format_unit(orbit:periapsis) + "m").
+		}
+	}
+
+	local alt_trigger_index is 0.
+	until alt_trigger_index >= altitude_triggers:length or ship:altitude < altitude_triggers[alt_trigger_index] {
+		set alt_trigger_index to alt_trigger_index + 2.
+	}
+	local speed_trigger_index is 0.
+	until speed_trigger_index >= speed_triggers:length or not above_speed(speed_triggers[speed_trigger_index]) {
+		set speed_trigger_index to speed_trigger_index + 2.
+	}
 
 	until false {
 		// refresh settings every second
@@ -195,9 +302,10 @@ function main {
 			set turn_angle to settings:grav_turn:angle:toscalar(turn_angle).
 			set turn_velocity to settings:grav_turn:vel:toscalar(turn_velocity).
 			set extra_pitch to settings:grav_turn:pitch:toscalar(extra_pitch).
-			set cmd_hdg to launch_azimuth(inc).
+			local azim is launch_azimuth(inc, not settings:orbit:northbound).
+			set cmd_hdg to azim:hdg.
 			logger:set_settings(lexicon(
-				"orbit", lexicon("inc_info", "Launch azimuth: " + round(cmd_hdg,1) + "°")
+				"orbit", lexicon("inc_info", "Azimuth: " + round(cmd_hdg,1) + "°, DV gain: " + format_unit(azim:dv_gain) + "m/s")
 			)).
 		}
 
@@ -226,12 +334,18 @@ function main {
 			"Status", state
 		)).
 
-
-		if pe_shutdown > 0 and periapsis > pe_shutdown and check_cutoff {
-			// set ship:control:mainthrottle to 0.
-			set ship:control:pilotmainthrottle to 0.
-			set check_cutoff to false.
-			logger:log("Engine cut-off: " + format_unit(orbit:apoapsis) + "m x " + format_unit(orbit:periapsis) + "m").
+		// Print messages at specific altitudes during ascent
+		if alt_trigger_index < altitude_triggers:length and altitude_triggers[alt_trigger_index] < ship:altitude {
+			local msg is "Altitude " + round(altitude_triggers[alt_trigger_index] / 1000) + " km".
+			if altitude_triggers[alt_trigger_index+1] <> "" {
+				set msg to msg + " - " + altitude_triggers[alt_trigger_index+1].
+			}
+			logger:log(msg).
+			set alt_trigger_index to alt_trigger_index + 2.
+		}
+		if speed_trigger_index < speed_triggers:length and above_speed(speed_triggers[speed_trigger_index]) {
+			logger:log(speed_triggers[speed_trigger_index + 1]).
+			set speed_trigger_index to speed_trigger_index + 2.
 		}
 
 		if missionTime > 0 and state = "Prelaunch" {
@@ -251,13 +365,12 @@ function main {
 			set cmd_pitch to clamp(vector_pitch(ship:velocity:surface)-extra_pitch, 45, 90-turn_angle).
 			if altitude > 50_000 {
 				logger:log("End guidance").
-				set active to false.
-				set on_switch:pressed to false.
-				set on_switch:enabled to false.
-				sas on.
-				unlock steering.
+				set pitch_ctrl:visible to true.
 				set state to "Manual flight".
 			}
+		}
+		if state = "Manual flight" {
+			set cmd_pitch to pitch_input_val.
 		}
 
 		// Log telemetry on launch and then every 10 seconds.

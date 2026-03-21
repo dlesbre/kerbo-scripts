@@ -225,7 +225,7 @@ function create_gui {
   local settings_width is 250.
 
   local main_gui is GUI(width, height + readouts_height).
-  set main_gui:draggable to true.
+  set main_gui:draggable to false.
   set main_gui:x to 120. // Window in top left
   set main_gui:y to 75.
 
@@ -239,8 +239,15 @@ function create_gui {
   local settings_widget is create_settings(right_panel, settings).
 
   local tbox is left_panel:addhlayout().
-  local title is tbox:addlabel("<b>    Flight computer</b>").
+  local title is tbox:addlabel("<b>Flight computer</b>").
   set title:style:hstretch to true.
+  set title:style:margin:left to title:style:margin:right + 60.
+  local drag is tbox:addbutton("+").
+  set drag:style:width to 25.
+  set drag:toggle to true.
+  set drag:onclick to {
+    set main_gui:draggable to drag:pressed.
+  }.
   local close is tbox:addbutton("<color=red>X</color>").
   set close:style:width to 25.
   set close:onclick to { set main_gui:visible to false. }.

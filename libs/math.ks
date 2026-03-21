@@ -93,11 +93,14 @@ function absolute_launch_azimuth {
 
 function launch_azimuth {
 	parameter inc.
-	parameter pe is 200.
-	parameter ap is pe.
+	parameter south_bound is false.
+	parameter pe is max(200, orbit:periapsis / 1000 + 20).
+	parameter ap is max(pe, orbit:apoapsis / 1000 + 100).
 
 	local azimuth is absolute_launch_azimuth(inc).
+	if south_bound set azimuth to 180 - azimuth.
 	local orbital_velocity is heading(azimuth, 0, 0):vector.
 	set orbital_velocity:mag to orbit_speed_at(pe,pe,ap).
-	return vector_heading(orbital_velocity - ship:orbit:velocity:orbit).
+	local true_velocity is orbital_velocity - ship:orbit:velocity:orbit.
+	return lexicon("hdg", vector_heading(true_velocity), "dv_gain", orbital_velocity:mag - true_velocity:mag, "azimuth", azimuth).
 }
