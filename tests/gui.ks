@@ -24,10 +24,10 @@ logger:log("foo").
 logger:log("<b>Everything is fine</b>").
 logger:debug("<color=red>WAIT NO</color>").
 logger:log("<b>RlqmkFJ SQFMDLKJ SQFDMLK FSQDLMJ FQSMLKJ SQDFMLJ QSDFMLJ QSFDLMKJ QFSLMKJ</b>").
-logger:set_settings(lexicon("turn_start", lexicon("alt","10_000", "angle", "5"), "drop_fairings", true, "ex", "AA", "runway", "Runway 90")).
+logger:update_settings(lexicon("turn_start", lexicon("alt","10_000", "angle", "5"), "drop_fairings", true, "ex", "AA", "runway", "Runway 90")).
 set x to logger:get_settings().
 wait 5.
 logger:log("Updated settings").
-logger:set_settings(lexicon("turn_start", lexicon("alt","80_000", "angle", "25"), "drop_fairings2", true, "ex2", "BB", "ex", "", "runway", "Runway 270")).
+logger:update_settings(lexicon("turn_start", lexicon("alt","80_000", "angle", "25"), "drop_fairings2", true, "ex2", "BB", "ex", "", "runway", "Runway 270")).
 wait 20.
 logger:gui:hide().

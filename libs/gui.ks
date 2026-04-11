@@ -24,9 +24,13 @@ function mlog {
 // Takes a list of readouts (either string, or lexicon("name": String; "label": String, "align: String = "right" "unit": String?)
 function create_readouts {
   parameter vbox.
-  parameter readouts. // list<lexicon>
+  parameter readout_widgets. //: Lexicon<Label>
+  parameter readouts.        //: List<Lexicon>
 
-  local readout_widgets is lexicon().
+  vbox:clear().
+  readout_widgets:clear().
+  set vbox:style:height to 25*readouts:length + 5.
+  set vbox:visible to true.
 
   function set_style{ parameter label.
     set label:style:margin:v to 0.
@@ -84,16 +88,20 @@ function merge_lexicons {
 //               - optional 'align: String' specifies how a value should be aligned
 //               - optional 'unit: String' specifies a unit displayed after the box
 //               - optional 'tooltip: String' specifies greyed out text
-// - "popup" -> list of choices, must be provided in "choices"
+// - "popup" -> list of choices, must be provided in "choices",
+//              optional field "tabs": list of same length as choice, displayed
+//              when the relevant choice is selected
 // - "radio" -> same as popup, but list of radio buttons
 // - "vbox" -> box containing sub-widgets, specified in the "widgets" field
-// Settings then need to be initialized via set_settings
+// Settings then need to be initialized via update_settings
 function create_settings {
-  parameter vbox.
-  parameter settings.
-  parameter title_text is "Settings".
+  parameter vbox.                     //: Box
+  parameter setting_widgets.          //: Lexicon
+  parameter settings.                 //: List<Setting>
+  parameter title_text is "Settings". //: String
 
-  local setting_widgets is lexicon().
+  vbox:clear().
+  setting_widgets:clear().
 
   if title_text <> "" {
     local title is vbox:addlabel("<b>" + title_text + "</b>").
@@ -139,6 +147,29 @@ function create_settings {
       set popup:options to setting:choices.
       set popup:style:hstretch to true.
       set setting_widgets[setting:name] to popup.
+      if setting:haskey("tabs") {
+        local tabregion is vbox:addvbox().
+        local tabs is list().
+        for tab in setting:tabs {
+          local frame is tabregion:addstack().
+          merge_lexicons(setting_widgets, create_settings(frame:addvlayout(), lexicon(), tab, "")).
+          set frame:visible to false.
+          tabs:add(frame).
+        }
+        set tabregion:visible to false.
+        set popup:onchange to {
+          parameter text.
+          if popup:index < 0 {
+            set tabregion:visible to false.
+            for tab in tabs { set tab:visible to false. }
+          }
+          else {
+            tabregion:showonly(tabs[popup:index]).
+            set tabregion:visible to setting:tabs[popup:index]:length > 0.
+
+          }
+        }.
+      }
     }
     else if setting:type = "radio" {
       local widget is vbox:addvlayout().
@@ -155,9 +186,9 @@ function create_settings {
         choose vbox:addhbox() if setting:type = "hbox" else
         choose vbox:addhlayout() if setting:type = "hlayout" else vbox:addvlayout().
       local sub_settings is
-        choose create_settings(box, setting:widgets, label)
+        choose create_settings(box, lexicon(), setting:widgets, label)
         if setting:haskey("label")
-        else create_settings(box, setting:widgets, "").
+        else create_settings(box, lexicon(), setting:widgets, "").
       if setting:name <> ""
         set setting_widgets[setting:name] to sub_settings.
       else merge_lexicons(setting_widgets, sub_settings).
@@ -167,7 +198,7 @@ function create_settings {
   return setting_widgets.
 }
 
-function set_settings {
+function update_settings {
   parameter setting_widgets.
   parameter values.
   for key in values:keys() {
@@ -182,7 +213,7 @@ function set_settings {
       if index < 0 print "Error: invalid popup choice '" + values[key] + "'".
     }
     else if widget:typename = "lexicon" {
-      set_settings(widget, values[key]).
+      update_settings(widget, values[key]).
     }
     else if widget:typename = "box" {
       local correct is values[key] = "".
@@ -215,16 +246,12 @@ function get_settings {
 }
 
 function create_gui {
-  parameter settings is list().
-  parameter readouts is list().
   parameter width is 350.
-  parameter height is 400.
-
-  local readouts_height is 25 * readouts:length().
+  parameter height is 600.
 
   local settings_width is 250.
 
-  local main_gui is GUI(width, height + readouts_height).
+  local main_gui is GUI(width, height).
   set main_gui:draggable to false.
   set main_gui:x to 120. // Window in top left
   set main_gui:y to 75.
@@ -235,8 +262,6 @@ function create_gui {
   set left_panel:style:width to width - 20.
   local right_panel is contents:addvlayout().
   set right_panel:visible to false.
-
-  local settings_widget is create_settings(right_panel, settings).
 
   local tbox is left_panel:addhlayout().
   local title is tbox:addlabel("<b>Flight computer</b>").
@@ -256,12 +281,13 @@ function create_gui {
   set title:style:align to "center".
   left_panel:addspacing(10).
 
+  local program_selector is left_panel:addvlayout().
+
   local readouts_box is left_panel:addvbox().
-  set readouts_box:style:height to readouts_height.
   set readouts_box:style:width to 270.
   set readouts_box:style:margin:h to 30.
   set readouts_box:style:padding:v to 5.
-  local readout_widgets is create_readouts(readouts_box, readouts).
+  set readouts_box:visible to false.
 
   local toggles is left_panel:addhlayout().
   set toggles:style:hstretch to true.
@@ -294,7 +320,8 @@ function create_gui {
   }
   on ag10 toggle_gui_visibility().
 
-
+  local settings_widget is lexicon().
+  local readout_widgets is lexicon().
 
   local vbox is scrollbox:AddVLayout().
   return lexicon(
@@ -305,8 +332,12 @@ function create_gui {
     "panel", left_panel:addvlayout(),
     "log", mlog@:bind(scrollbox, vbox, false, debug_labels, show_debug),
     "debug", mlog@:bind(scrollbox, vbox, true, debug_labels, show_debug),
-    "set_settings", set_settings@:bind(settings_widget),
+    "set_settings", create_settings@:bind(right_panel, settings_widget),
+    "update_settings", update_settings@:bind(settings_widget),
     "get_settings", get_settings@:bind(settings_widget),
-    "update_readouts", update_readouts@:bind(readout_widgets)
+    "set_readouts", create_readouts@:bind(readouts_box, readout_widgets),
+    "update_readouts", update_readouts@:bind(readout_widgets),
+    "readout_box", readouts_box,
+    "program_selector", program_selector
   ).
 }

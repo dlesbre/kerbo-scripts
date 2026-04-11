@@ -8,7 +8,9 @@ sas off.
 lock np to lookdirup(Body("Sun"):position, facing:topvector).
 lock steering to np.
 
-wait until aligned(np, facing).
+until interrupt or aligned(np, facing) {
+	wait 0.1.
+}.
 
 unlock steering.
 sas on.

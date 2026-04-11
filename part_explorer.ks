@@ -149,7 +149,7 @@ set searchbar:onchange to {
 
 window:show().
 
-until ended {
+until interrupt or ended {
   wait 0.5.
 }
 

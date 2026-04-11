@@ -94,9 +94,10 @@ function absolute_launch_azimuth {
 function launch_azimuth {
 	parameter inc.
 	parameter south_bound is false.
-	parameter pe is max(200, orbit:periapsis / 1000 + 20).
-	parameter ap is max(pe, orbit:apoapsis / 1000 + 100).
-
+	parameter pe is 200. // km
+	parameter ap is pe. // km
+	set pe to max(pe, orbit:periapsis / 1000 + 20).
+	set ap to max(ap, orbit:apoapsis / 1000 + 100).
 	local azimuth is absolute_launch_azimuth(inc).
 	if south_bound set azimuth to 180 - azimuth.
 	local orbital_velocity is heading(azimuth, 0, 0):vector.
