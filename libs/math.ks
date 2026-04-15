@@ -47,7 +47,7 @@ function vector_clamp{
 	return cos(ang)*v1 + sin(ang)*vector_orthogonal(v1,v2).
 }
 
-function orbit_from_ap_pe {
+function orbit_from_pe_ap {
 	parameter pe.
 	parameter ap.
 	parameter focal is ship:body.
@@ -55,7 +55,7 @@ function orbit_from_ap_pe {
 	parameter lan is 0.
 	local sma is (ap + pe)/2 + focal:radius.
 	local ecc is (ap - pe) / (ap + pe).
-	return createOrbit(inclination, ecc, sma, lan, 0, 0, focal).
+	return createOrbit(inclination, ecc, sma, lan, 0, 0, 0, focal).
 }
 
 // orbit_speed_at(alt, [pe], [ap], [body]) return the orbital speed at the specified altitude
@@ -69,9 +69,6 @@ function orbit_speed_at {
 	return sqrt(focal:mu * (2 / (alti + focal:radius) - 1 / sma)).
 }
 
-// Molar Gas constant, in J.K⁻¹.mol⁻¹ (or m³.Pa.K⁻¹.mol⁻¹)
-set get_constant to 8.31446261815324.
-
 // This is only an estimate because P/T do not only depend on altitude
 // https://en.wikipedia.org/wiki/Dynamic_pressure
 function dynamic_pressure {
@@ -79,7 +76,7 @@ function dynamic_pressure {
 	local pressure is body:atm:altitudePressure(alti) * constant:atmtokpa.
 	local temperature is body:atm:altitudeTemperature(alti).
 	if temperature = 0 return 0.
-	local density is 1000 * body:atm:molarmass * pressure / (get_constant * temperature).
+	local density is 1000 * body:atm:molarmass * pressure / (constant:idealgas * temperature).
 	return density * ship:velocity:surface:mag^2 / 2.
 }
 
@@ -102,6 +99,25 @@ function launch_azimuth {
 	if south_bound set azimuth to 180 - azimuth.
 	local orbital_velocity is heading(azimuth, 0, 0):vector.
 	set orbital_velocity:mag to orbit_speed_at(pe,pe,ap).
-	local true_velocity is orbital_velocity - ship:orbit:velocity:orbit.
+	local true_velocity is orbital_velocity - velocity:orbit.
 	return lexicon("hdg", vector_heading(true_velocity), "dv_gain", orbital_velocity:mag - true_velocity:mag, "azimuth", azimuth).
+}
+
+function time_to_orbit {
+	parameter pe.
+	parameter ap.
+	local accel is ship:maxthrust / ship:mass.
+	if accel = 0 return 0.
+	local velocity_diff is orbit_speed_at(pe,pe,ap) - velocity:orbit:mag.
+	if velocity_diff < 0 return 0.
+	return velocity_diff / accel.
+}
+
+function orbit_normal { parameter o.
+	return vcrs(o:velocity:orbit, o:position - o:body:position):normalized().
+}
+
+function relative_inclination {
+	parameter obt1, obt2.
+	return vang(orbit_normal(obt1), orbit_normal(obt2)).
 }

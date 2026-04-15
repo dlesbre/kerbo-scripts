@@ -49,6 +49,40 @@ set stop_pgrm_btn:onclick to {
   set current_program to "".
 }.
 
+local rcs_configs is list("MMH+NTO", "NitrousOxide", "Hydrazine").
+function engine_name{
+  parameter engine. //: Engine
+  if engine:config = "SolidFuel" return engine:title.
+  if rcs_configs:find(engine:config) >= 0 return engine:title.
+  return engine:config.
+}
+
+local failed_engines is lexicon().
+function engine_failed {
+  parameter engine. //: Engine
+  if not engine:hasmodule("ModuleEnginesRF") return false.
+  local module is engine:getmodule("ModuleEnginesRF").
+  if not module:hasfield("status") return false.
+  local engine_status is module:getfield("status").
+  if engine_status = "Nominal" return false.
+  if engine_status = "Flame-Out!" return false.
+  set engine_status to engine_status + " " + (choose module:getfield("cause") if module:hasfield("cause") else "unknown").
+  if failed_engines:haskey(engine:uid) {
+    local previous_fail is failed_engines[engine:uid].
+    if engine_status = previous_fail return false.
+  }
+  window:log(engine_name(engine) + " " + engine_status).
+  return true.
+}
+
+function check_engines {
+  list engines in ship_engines.
+  for engine in ship_engines {
+    engine_failed(engine).
+  }
+}
+
+
 if status = "prelaunch" {
   set current_program to "Ascent".
   switch_display().
@@ -64,6 +98,7 @@ until false {
     set current_program_label:text to "".
     window:panel:clear().
     set window:readout_box:visible to false.
+    window:set_settings(list()).
   }
   wait 1.
 }

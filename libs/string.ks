@@ -22,12 +22,19 @@ function format_unit {
 // format duration as '[Ny ][Nd+]HH:MM:SS'
 function format_duration {
   parameter t.
+  parameter seconds_neg is false. // wether or not to format negative numbers
+  local prefix is "".
+  if t < 0 {
+    if seconds_neg return round(t):tostring() + "s".
+    set t to -t.
+    set prefix to "-".
+  }
   local days is floor(t/86400).
   set t to mod(t,86400).
   local res to pad_with_0(floor(t/3600))+":"+pad_with_0(floor(mod(t,3600)/60))+":"+pad_with_0(floor(mod(t, 60))).
-  if days > 365 return floor(days/365)+"y "+mod(days,365)+"d+"+res.
-  else if days > 0 return days:tostring()+"d+"+res.
-  return res.
+  if days > 365 return prefix + floor(days/365)+"y "+mod(days,365)+"d+"+res.
+  else if days > 0 return prefix + days:tostring()+"d+"+res.
+  return prefix + res.
 }
 
 // pretty print an angle as x° y' z''
