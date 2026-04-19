@@ -75,7 +75,7 @@ function module_info {
     vbox:addlabel("Action: " + action).
   }
   for event in part_module:allevents {
-    vbox:addlabel("Action: " + event).
+    vbox:addlabel("Event: " + event).
   }
 
   subwindow:showonly(module_details).

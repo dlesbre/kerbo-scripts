@@ -1,5 +1,7 @@
 // #include "main.ks"
 run once "0:libs/string".
+run once "0:libs/parts".
+
 
 function aligned {
 	parameter dir1, dir2 is facing.
@@ -13,6 +15,7 @@ window:set_readouts(list(rd_sun_angle, rd_rotation)).
 
 rcs on.
 sas off.
+local avionics_were_off is activate_avionics().
 lock sun_pos to Body("Sun"):position.
 lock np to lookdirup(sun_pos, facing:topvector).
 lock steering to np.
@@ -37,5 +40,6 @@ until interrupt or aligned(np, facing) {
 	)).
 }.
 
+if avionics_were_off shutdown_avionics().
 unlock steering.
 sas on.

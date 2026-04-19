@@ -10,7 +10,7 @@ function mlog {
   parameter show_debug.
   parameter message.
   local color is choose "purple" if debug else "white".
-  local label is vbox:addlabel("[" + format_duration(missionTime) + "] <color=" + color + ">" + message + "</color>").
+  local label is vbox:addlabel("[" + format_HH_MM_SS(missionTime) + "] <color=" + color + ">" + message + "</color>").
   set scrollbox:position to V(0,40000,0).
   set label:style:margin:v to 0.
   if debug {
@@ -157,6 +157,7 @@ function create_settings {
           tabs:add(frame).
         }
         set tabregion:visible to false.
+        local tabs_copy is setting:tabs.
         set popup:onchange to {
           parameter text.
           if popup:index < 0 {
@@ -165,8 +166,7 @@ function create_settings {
           }
           else {
             tabregion:showonly(tabs[popup:index]).
-            set tabregion:visible to setting:tabs[popup:index]:length > 0.
-
+            set tabregion:visible to tabs_copy[popup:index]:length > 0.
           }
         }.
       }
@@ -210,6 +210,7 @@ function update_settings {
     else if widget:typename = "popupmenu" {
       local index is widget:options:find(values[key]).
       set widget:index to index.
+      widget:onchange(values[key]).
       if index < 0 print "Error: invalid popup choice '" + values[key] + "'".
     }
     else if widget:typename = "lexicon" {

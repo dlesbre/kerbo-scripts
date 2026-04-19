@@ -1,18 +1,9 @@
 // #include "main.ks"
 run once "0:libs/string".
+run once "0:libs/parts".
 
-local default_ullage_time is 4.
-
-function ullage_required {
-  list engines in engs.
-  for engine in engs {
-    if engine:ignition and engine:ullage {
-      return default_ullage_time.
-    }
-  }
-  return 0.
-}
-local ullage_time is ullage_required().
+local ullage_time is choose 4 if engine_ullage() else 0.
+local spool_up is round(engine_spool_up_time(),2).
 
 window:set_settings(list(
     lexicon("type", "input", "name", "ullage", "label", "RCS ullage", "unit", "s"),
@@ -26,7 +17,8 @@ window:set_settings(list(
         list(lexicon("type", "input", "name", "ap_ge", "label", "Ap Alt >=", "unit", "km")),
         list(lexicon("type", "input", "name", "ap_le", "label", "Ap Alt <=", "unit", "km"))
       )
-    )
+    ),
+    lexicon("type", "input", "name", "spool_up", "label", "Engine spoolup: ", "unit", "s")
   )).
 window:set_readouts(list("Time to node", "Delta-v", "Status")).
 window:gui:show().
@@ -34,7 +26,8 @@ window:update_settings(lexicon(
   "ullage", ullage_time,
   "follow_node", true,
   "stop_cond", "Burn Time",
-  "pe_ge", 200, "pe_le", 200, "ap_le", 200, "ap_ge", 200
+  "pe_ge", 200, "pe_le", 200, "ap_le", 200, "ap_ge", 200,
+  "spool_up", spool_up
 )).
 
 local warp_margin is 60. // s
@@ -56,7 +49,7 @@ local autostop is command_pane:addbutton("Auto-stop").
 set autostop:toggle to true.
 
 local abort is false.
-local program_status is "waiting".
+local program_status is "Waiting".
 
 local no_condition is { return true. }.
 local check_condition is no_condition@.
@@ -66,7 +59,7 @@ set warp_to:onclick to {
     error_hud_message("No node").
     return.
   }
-  kuniverse:timewarp:warpto(time:seconds + nextNode:eta - warp_margin - ullage_time).
+  kuniverse:timewarp:warpto(time:seconds + nextNode:eta - spool_up - warp_margin - ullage_time).
 }.
 
 function set_autostop {
@@ -95,26 +88,29 @@ function start_burn {
 }
 
 local orient is ship:facing:forevector.
+local avionics_were_off is false.
 
 set execute:ontoggle to {
   parameter is_on.
   set autopilot_running to is_on and not interrupt.
   if autopilot_running {
     set autostop:pressed to true.
-    when (not autopilot_running or (hasNode and nextNode:eta - ullage_time < 60)) then {
+    when (not autopilot_running or (hasNode and nextNode:eta - spool_up - ullage_time < 60)) then {
       if not autopilot_running return false.
       sas off.
       rcs on.
       set orient to nextNode:deltav.
       lock steering to orient.
-      when (not autopilot_running or (hasNode and nextNode:eta < ullage_time)) then {
+      set program_status to "Pointing to node".
+      set avionics_were_off to activate_avionics().
+      when (not autopilot_running or (hasNode and nextNode:eta - spool_up < ullage_time)) then {
         if not autopilot_running return false.
         if ullage_time > 0 {
           window:log("Settling tanks").
           set program_status to "Ullage burn".
           rcs on.
           set ship:control:fore to 1.
-          when (not autopilot_running or (hasNode and nextNode:eta < 0)) then start_burn().
+          when (not autopilot_running or (hasNode and nextNode:eta - spool_up < 0)) then start_burn().
         }
         else start_burn().
       }
@@ -133,7 +129,7 @@ until interrupt {
 
   if hasNode {
     window:update_readouts(lexicon(
-      "Time to node", format_duration(nextNode:eta, true),
+      "Time to node", format_HH_MM_SS(nextNode:eta, true),
       "Delta-v", format_unit(nextNode:deltav:mag, " ") + "m/s",
       "Status", program_status
     )).
@@ -148,6 +144,7 @@ until interrupt {
 
   local settings is window:get_settings().
   set ullage_time to settings:ullage:toscalar(ullage_time).
+  set spool_up to settings:spool_up:toscalar(spool_up).
   local burn_t is settings:burn_t:toscalar(-1).
   if settings:stop_cond = "Burn Time" set check_condition to { return start_t > 0 and time:seconds - start_t >= burn_t. }.
   if settings:stop_cond = "Apoapsis <=" set check_condition to { return apoapsis <= 1000*settings:ap_le:toscalar(). }.
@@ -162,6 +159,7 @@ until interrupt {
   wait 0.1.
 }
 
+if avionics_were_off shutdown_avionics().
 set autopilot_running to false.
 set abort to true.
 unlock steering.

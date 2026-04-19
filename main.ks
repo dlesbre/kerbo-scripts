@@ -71,7 +71,19 @@ function engine_failed {
     local previous_fail is failed_engines[engine:uid].
     if engine_status = previous_fail return false.
   }
-  window:log(engine_name(engine) + " " + engine_status).
+
+  if engine:tag:startswith("Shutdown") {
+    engine:shutdown().
+    // Shutdown symmetric engines to avoid unbalance thrust
+    local symmetric_engines is ship:partstagged(engine:tag).
+    for eng in symmetric_engines {
+      eng:shutdown().
+    }
+    if symmetric_engines:length = 1
+      window:log(engine_name(engine) + " " + engine_status + ", shutdown.").
+    else
+      window:log(engine_name(engine) + " " + engine_status + ", shutdown (along with " + (symmetric_engines:length - 1) +" symmetric engine)").
+  } else window:log(engine_name(engine) + " " + engine_status).
   return true.
 }
 
@@ -82,12 +94,18 @@ function check_engines {
   }
 }
 
-
 if status = "prelaunch" {
   set current_program to "Ascent".
   switch_display().
 }
-window:gui:show().
+if ship = kuniverse:activevessel
+  window:gui:show().
+
+local readouts is list("Electric Charge", "Net Power").
+local ec_t is -1.
+local ec_amount is -1.
+local ec_percent is "none".
+window:set_readouts(readouts).
 until false {
   if current_program <> "" {
     runpath("0:" + current_program:tolower():replace(" ", "_")).
@@ -97,8 +115,33 @@ until false {
     set program_selector_layout:visible to true.
     set current_program_label:text to "".
     window:panel:clear().
-    set window:readout_box:visible to false.
+    window:set_readouts(readouts).
     window:set_settings(list()).
+    set ec_amount to -1.
+    set ec_t to -1.
   }
+  local ec_power is 0.
+  local ec_capacity is 0.
+  local resources is ship:resources.
+  for resource in resources {
+    if resource:name = "ElectricCharge" {
+      if ec_t >= 0 {
+        set ec_power to (resource:amount - ec_amount) / (time:seconds - ec_t). // in mW
+      }
+      set ec_t to time:seconds.
+      set ec_amount to resource:amount.
+      set ec_capacity to resource:capacity.
+      if resource:capacity > 0
+        set ec_percent to round(resource:amount * 100 / resource:capacity):tostring() + "%".
+      else set ec_percent to "none".
+    }
+  }
+  local ec_power_str is format_unit(ec_power * 1000 , " ") + "W".
+  if ec_power < 0 {
+    set ec_power_str to "<color=orange>" + ec_power_str + "</color> (empty in " + format_duration(-ec_amount / ec_power) + ")".
+  } else if ec_power > 0 {
+    set ec_power_str to "<color=green>" + ec_power_str + "</color> (full in " + format_duration((ec_capacity - ec_amount) / ec_power) + ")".
+  }
+  window:update_readouts(lexicon("Electric Charge", ec_percent, "Net Power", ec_power_str)).
   wait 1.
 }

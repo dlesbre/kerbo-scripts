@@ -20,7 +20,7 @@ function format_unit {
 }
 
 // format duration as '[Ny ][Nd+]HH:MM:SS'
-function format_duration {
+function format_HH_MM_SS {
   parameter t.
   parameter seconds_neg is false. // wether or not to format negative numbers
   local prefix is "".
@@ -35,6 +35,20 @@ function format_duration {
   if days > 365 return prefix + floor(days/365)+"y "+mod(days,365)+"d+"+res.
   else if days > 0 return prefix + days:tostring()+"d+"+res.
   return prefix + res.
+}
+
+// format a duration as '4h 30m' or '20m 10s' or '5d 4h'
+function format_duration {
+  parameter t.
+  local prefix is "".
+  if t < 0 {
+    set t to -t.
+    set prefix to "-".
+  }
+  if t > 86400 return prefix + floor(t/86400):tostring() + "d " + pad_with_0(floor(mod(t,86400)/3600)) + "h".
+  if t > 3600 return prefix + floor(t/3600):tostring() + "h " + pad_with_0(floor(mod(t,3600)/60)) + "m".
+  if t > 60 return prefix + floor(t/60):tostring() + "m " + pad_with_0(floor(mod(t,60))) + "s".
+  return prefix + floor(t):tostring() + "s".
 }
 
 // pretty print an angle as x° y' z''

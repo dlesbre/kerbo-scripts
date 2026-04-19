@@ -1,12 +1,12 @@
 // #include "main.ks"
 run once "0:/libs/math".
-
-// Mustang 1F: 5° 0.4°
+run once "0:/libs/parts".
 
 // Settings per launch vehicul
 local lv_settings is lexicon(
-	"default", lexicon("turn_angle", 10, "extra_pitch", 1),
-	"Mustang F", lexicon("turn_angle", 5, "extra_pitch", 0.5)
+	"default", lexicon("turn_start", 50, "turn_angle", 10, "extra_pitch", 1, "roll", 90),
+	"Mustang F", lexicon("turn_angle", 5, "extra_pitch", 0.5),
+	"Stallion", lexicon("turn_start", 60, "turn_angle", 3, "extra_pitch", 0.15, "roll", 0)
 ).
 
 local preset is lv_settings["default"].
@@ -24,17 +24,18 @@ lock g to earth:mu / (altitude + earth:radius)^2.
 
 local cmd_pitch is 90.
 local cmd_hdg is 90.
-local cmd_roll is 90.
+local cmd_roll is preset:roll.
 lock cmd_dir to ship:facing.
-local active is true.
 
 local inc is ceiling(abs(latitude),4).
 local pe is 160.
 local ap is 200.
 local lan is 1000. // Default value for when no LAN is input
-local turn_velocity is 50.
+local turn_velocity is preset:turn_start.
 local turn_angle is preset:turn_angle.
 local extra_pitch is preset:extra_pitch.
+local spool_stage is true.
+local follow_prograde is false.
 
 // TestFlight: ModuleEnginesRF
 // status = Failed
@@ -47,7 +48,7 @@ function warp_to_LAN {
 	if status = "prelaunch" or status = "landed" {
 		if lan = 1000 {
 			set lan to target:orbit:lan.
-			set inc to target:orbit:inc.
+			set inc to target:orbit:inclination.
 		}
 		local tlan is mod(360 + lan - body:rotationangle + warp_LAN_diff, 360).
 		local tldn is mod(tlan + 180, 360).
@@ -65,7 +66,7 @@ function warp_to_LAN {
 		local rot_rate is 360/BODY:ROTATIONPERIOD. // deg/s
 
 		local wait_time is lon_diff/rot_rate. // seconds
-		window:log("Warping to " + (choose "LAN" if lon_diff_AN < lon_diff_DN else "LDN") + " in " + format_duration(wait_time)).
+		window:log("Warping to " + (choose "LAN" if lon_diff_AN < lon_diff_DN else "LDN") + " in " + format_HH_MM_SS(wait_time)).
 		window:update_settings(lexicon("orbit", lexicon("northbound", lon_diff_AN < lon_diff_DN, "inc", incl, "lan", lan))).
 		kuniverse:timewarp:warpto(time:seconds + wait_time - warp_margin).
 	}
@@ -158,15 +159,12 @@ function above_speed {
 	return ship:velocity:orbit:mag >= speed.
 }
 
-
-
-
-
 // =============================================================================
 // GUI updates
 // =============================================================================
 local state is "Prelaunch".
 
+local spool_up_time is engine_spool_up_time(engines_by_stage(stage:number-1)).
 window:set_settings(list(
 		lexicon("type", "vbox", "name", "grav_turn", "label", "Gravity turn", "widgets", list(
 			lexicon("type", "input", "name", "vel", "label", "Turn start speed:", "tooltip", turn_velocity, "unit", "m/s"),
@@ -184,15 +182,18 @@ window:set_settings(list(
 			lexicon("type", "checkbox", "name", "Northbound"),
 			lexicon("type", "label", "name", "inc_info", "label", "Launch azimuth: "))),
 		lexicon("type", "checkbox", "name", "drop_fairings", "label", "Auto-deploy fairings"),
-		lexicon("type", "checkbox", "name", "log_telemetry", "label", "Log telemetry"),
-		lexicon("type", "checkbox", "name", "shutdown_pe", "label", "Shutdown when Pe reached")
+		lexicon("type", "checkbox", "name", "spool_stage", "label", "Stage after spool-up: " + round(spool_up_time,2) + "s"),
+		lexicon("type", "checkbox", "name", "shutdown_pe", "label", "Shutdown when Pe reached"),
+		lexicon("type", "checkbox", "name", "follow_prograde", "label", "Follow prograde heading")
+
 	)).
 window:set_readouts(list("Orbit", "P,H,R", "Angle on prograde", "TWR", "Status")).
 window:update_settings(lexicon(
 	"drop_fairings", true,
-	"log_telemetry", false,
 	"grav_turn", lexicon("vel", turn_velocity, "angle", turn_angle, "pitch", extra_pitch),
-	"orbit", lexicon("pe", pe, "ap", ap, "inc", inc, "inc_info", "Launch azimuth: 90°", "northbound", true)
+	"spool_stage", spool_stage,
+	"orbit", lexicon("pe", pe, "ap", ap, "inc", inc, "inc_info", "Launch azimuth: 90°", "northbound", true),
+	"follow_prograde", follow_prograde
 )).
 
 // Warp to target AN/DN
@@ -247,7 +248,7 @@ set on_switch:style:hstretch to true.
 set on_switch:toggle to true.
 set on_switch:onclick to {
 	if on_switch:pressed {
-		if active { sas off. lock steering to cmd_dir. }
+		sas off. lock steering to cmd_dir.
 	}
 	else { sas on. unlock steering. }
 }.
@@ -257,9 +258,10 @@ set on_switch:onclick to {
 // Program triggers
 // =============================================================================
 // Vessel is locked upward until tower is cleared.
-local tower_clear_alt is ship:bounds:bottomaltradar + ship:bounds:size:mag.
+local ship_bounds is ship:bounds.
+local tower_clear_alt is ship_bounds:bottomaltradar + ship_bounds:size:mag.
 local tower_cleared is false.
-when interrupt or ship:bounds:bottomaltradar > tower_clear_alt then {
+when interrupt or ship_bounds:bottomaltradar > tower_clear_alt then {
 	if interrupt return false.
 	set tower_cleared to true.
 	window:log("Tower cleared").
@@ -267,6 +269,7 @@ when interrupt or ship:bounds:bottomaltradar > tower_clear_alt then {
 
 local stage_number is stage:number.
 local stage_count is 0.
+local stage_time is -1.
 when interrupt or stage_number <> stage:number then {
 	if interrupt return false.
 	if stage_count < stage_names:length
@@ -274,6 +277,8 @@ when interrupt or stage_number <> stage:number then {
 	else window:log("Stage " + stage_count).
 	set stage_count to stage_count + 1.
 	set stage_number to stage:number.
+	if stage_time = -1
+		set stage_time to time:seconds.
 	return true.
 }.
 when interrupt or orbit:periapsis > 140_000 then {
@@ -299,7 +304,6 @@ when interrupt or orbit:periapsis > pe * 1000 then {
 lock TWR to max(.001, ship:maxthrust/(ship:mass*g)).
 local max_q is dynamic_pressure().
 local max_q_t is missionTime.
-local log_telemetry_t is -1.
 local settings_t is 0.
 
 // In case the script is restarted mid flight, skipped passed log calls
@@ -315,6 +319,7 @@ until speed_trigger_index >= speed_triggers:length or not above_speed(speed_trig
 // =============================================================================
 // Main program loop
 // =============================================================================
+
 until interrupt {
 	// refresh settings every second
 	if (time:seconds - settings_t > 1) {
@@ -326,8 +331,10 @@ until interrupt {
 		set turn_angle to settings:grav_turn:angle:toscalar(turn_angle).
 		set turn_velocity to settings:grav_turn:vel:toscalar(turn_velocity).
 		set extra_pitch to settings:grav_turn:pitch:toscalar(extra_pitch).
+		set spool_stage to settings:spool_stage.
+		set follow_prograde to settings:follow_prograde.
 		local azim is launch_azimuth(inc, not settings:orbit:northbound, pe, ap).
-		set cmd_hdg to azim:hdg.
+		set cmd_hdg to choose vector_heading(ship:velocity:orbit) if follow_prograde else azim:hdg.
 		window:update_settings(lexicon(
 			"orbit", lexicon("inc_info", "Azimuth: " + round(cmd_hdg,1) + "°, DV gain: " + format_unit(azim:dv_gain) + "m/s")
 		)).
@@ -375,6 +382,10 @@ until interrupt {
 
 	if state = "Prelaunch" {
 		set warp_to_pane:visible to hasTarget or lan < 1000.
+		if stage_time > 0 and time:seconds - stage_time >= spool_up_time and spool_stage {
+			stage.
+			set stage_time to -5.
+		}
 		if missionTime > 0 {
 			set state to "Vertical ascent".
 			lock cmd_dir to ship:facing.
@@ -411,20 +422,6 @@ until interrupt {
 		}
 	}
 	window:update_readouts(readouts).
-
-	// Log telemetry on launch and then every 10 seconds.
-	if (missionTime > 0 and log_telemetry_t < 0) or (missionTime - log_telemetry_t >= 10) {
-		set log_telemetry_t to missionTime.
-		set settings to window:get_settings().
-		if window:get_settings():log_telemetry {
-			window:debug(
-				"Alt: " + format_unit(altitude) +
-				"m, SV: " + format_unit(ship:velocity:surface:mag) +
-				"m/s, OV: " + format_unit(ship:velocity:orbit:mag) +
-				"m/s, Pitch: " + round(vector_pitch(ship:facing:forevector), 1) +
-				"°, Hdg: " + round(ship:heading, 1) + "°").
-		}
-	}
 
 	wait 0.001.
 }
