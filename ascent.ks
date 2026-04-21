@@ -1,8 +1,13 @@
+// ascent.ks - Earth ascent script.
+//   Autopilot with simple gravity turn in low atmosphere
+//   Manual pitch control to circularize
+//   Allows launching into a specific inclination, or even a specific plane.
+// =============================================================================
+
 // #include "main.ks"
 run once "0:/libs/math".
-run once "0:/libs/parts".
 
-// Settings per launch vehicul
+// Settings per launch vehicule
 local lv_settings is lexicon(
 	"default", lexicon("turn_start", 50, "turn_angle", 10, "extra_pitch", 1, "roll", 90),
 	"Mustang F", lexicon("turn_angle", 5, "extra_pitch", 0.5),

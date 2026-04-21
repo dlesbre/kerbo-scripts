@@ -1,6 +1,7 @@
+// maneuver.ks - Execute next maneuver node, with various stop burn conditions
+// =============================================================================
+
 // #include "main.ks"
-run once "0:libs/string".
-run once "0:libs/parts".
 
 local ullage_time is choose 4 if engine_ullage() else 0.
 local spool_up is round(engine_spool_up_time(),2).

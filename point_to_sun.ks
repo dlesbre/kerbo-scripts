@@ -1,17 +1,16 @@
-// #include "main.ks"
-run once "0:libs/string".
-run once "0:libs/parts".
+// point_to_sun.ks - points current vessel at sun for solar panel exposure
+// =============================================================================
 
+// #include "main.ks"
+
+local rot_vel is 1.
 
 function aligned {
 	parameter dir1, dir2 is facing.
-	return abs(dir1:pitch - dir2:pitch) < 0.15 and abs(dir1:yaw - dir2:yaw) < 0.15.
+	return abs(dir1:pitch - dir2:pitch) < 0.15 and abs(dir1:yaw - dir2:yaw) < 0.15 and rot_vel <= 0.5.
 }
 
-local rd_sun_angle is "Sun angle".
-local rd_rotation is "Rotation speed".
-
-window:set_readouts(list(rd_sun_angle, rd_rotation)).
+window:set_readouts(list("Sun angle", "Rotation speed")).
 
 rcs on.
 sas off.
@@ -22,7 +21,6 @@ lock steering to np.
 
 local old_t is time:seconds.
 local old_steer is facing:forevector.
-local rot_vel is 0.
 
 until interrupt or aligned(np, facing) {
 
@@ -35,8 +33,8 @@ until interrupt or aligned(np, facing) {
 		set old_steer to steer.
 	}
 	window:update_readouts(lexicon(
-		rd_sun_angle, round(vang(sun_pos, facing:forevector),1):tostring + "°",
-		rd_rotation, round(rot_vel, 2) + "°/s"
+		"Sun angle", round(vang(sun_pos, facing:forevector),1):tostring + "°",
+		"Rotation speed", round(rot_vel, 2) + "°/s"
 	)).
 }.
 

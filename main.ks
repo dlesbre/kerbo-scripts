@@ -1,4 +1,26 @@
+// main.ks - Main program, opens a GUI with a flight log that allows selecting
+// various autopilot scripts
+// =============================================================================
+
+function is_min_cpu {
+  for cpu in ship:modulesnamed("kosProcessor") {
+    if cpu:bootfilename = core:bootfilename and cpu:mode = "ready" and cpu:part:cid < core:part:cid
+      return false.
+  }
+  return true.
+}
+
+// Only run main on one CPU per vessel - other CPUs wait for separation
+if not is_min_cpu() {
+  print "Not main CPU. Waiting".
+  until is_min_cpu() {
+    wait 30.
+  }
+}
+
+wait until homeConnection:isConnected.
 run once "0:/libs/gui".
+run once "0:/libs/parts".
 
 local program_list is list(
   "Ascent",
@@ -49,48 +71,17 @@ set stop_pgrm_btn:onclick to {
   set current_program to "".
 }.
 
-local rcs_configs is list("MMH+NTO", "NitrousOxide", "Hydrazine").
-function engine_name{
-  parameter engine. //: Engine
-  if engine:config = "SolidFuel" return engine:title.
-  if rcs_configs:find(engine:config) >= 0 return engine:title.
-  return engine:config.
-}
-
-local failed_engines is lexicon().
-function engine_failed {
-  parameter engine. //: Engine
-  if not engine:hasmodule("ModuleEnginesRF") return false.
-  local module is engine:getmodule("ModuleEnginesRF").
-  if not module:hasfield("status") return false.
-  local engine_status is module:getfield("status").
-  if engine_status = "Nominal" return false.
-  if engine_status = "Flame-Out!" return false.
-  set engine_status to engine_status + " " + (choose module:getfield("cause") if module:hasfield("cause") else "unknown").
-  if failed_engines:haskey(engine:uid) {
-    local previous_fail is failed_engines[engine:uid].
-    if engine_status = previous_fail return false.
-  }
-
-  if engine:tag:startswith("Shutdown") {
-    engine:shutdown().
-    // Shutdown symmetric engines to avoid unbalance thrust
-    local symmetric_engines is ship:partstagged(engine:tag).
-    for eng in symmetric_engines {
-      eng:shutdown().
-    }
-    if symmetric_engines:length = 1
-      window:log(engine_name(engine) + " " + engine_status + ", shutdown.").
-    else
-      window:log(engine_name(engine) + " " + engine_status + ", shutdown (along with " + (symmetric_engines:length - 1) +" symmetric engine)").
-  } else window:log(engine_name(engine) + " " + engine_status).
-  return true.
-}
-
 function check_engines {
   list engines in ship_engines.
   for engine in ship_engines {
-    engine_failed(engine).
+    local fail is engine_failed(engine).
+    if fail <> "" {
+      local nb is shutdown_symmetric_engines(engine).
+      if nb = 0 { window:log(engine_name(engine) + " " + fail). }
+      else if nb = 1 { window:log(engine_name(engine) + " " + fail + ", shutdown"). }
+      else if nb = 2 { window:log(engine_name(engine) + " " + fail + ", shutdown along with its symmetric engine"). }
+      else { window:log(engine_name(engine) + " " + fail + ", shutdown along with " + nb + " symmetric engines"). }
+    }
   }
 }
 
@@ -143,5 +134,6 @@ until false {
     set ec_power_str to "<color=green>" + ec_power_str + "</color> (full in " + format_duration((ec_capacity - ec_amount) / ec_power) + ")".
   }
   window:update_readouts(lexicon("Electric Charge", ec_percent, "Net Power", ec_power_str)).
+  check_engines().
   wait 1.
 }
