@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Dorian Lesbre
+// This program is licensed under the GNU General Public License v3.0.
+// See <https://www.gnu.org/licenses/gpl-3.0.html> for details.
+
 // libs/parts.ks - various utility function for manipulating vessel parts
 // =============================================================================
 
@@ -146,5 +150,14 @@ function engine_failed {
 // Unique identifier for engine (including configuration and tech level)
 function engine_id {
   parameter engine.
-  return engine:title + "##" + engine:config.
+  local id is engine:title + "##" + engine:config.
+  if rcs_configs:find(engine:config) >= 0 {
+    // RCS engines have different ISP based on tech level. Unfortunately, we can't
+    // access the tech level directly as a part module, so we use ressource ratio instead
+    local res is engine:consumedResources.
+    for k in res:keys() {
+      set id to id + "##" + res[k]:name + res[k]:maxfuelflow.
+    }
+  }
+  return id.
 }

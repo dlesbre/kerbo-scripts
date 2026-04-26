@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Dorian Lesbre
+// This program is licensed under the GNU General Public License v3.0.
+// See <https://www.gnu.org/licenses/gpl-3.0.html> for details.
+
 // point_to_sun.ks - points current vessel at sun for solar panel exposure
 // =============================================================================
 

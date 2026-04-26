@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Dorian Lesbre
+// This program is licensed under the GNU General Public License v3.0.
+// See <https://www.gnu.org/licenses/gpl-3.0.html> for details.
+
 // maneuver.ks - Execute next maneuver node, with various stop burn conditions
 // =============================================================================
 
@@ -82,7 +86,7 @@ local start_t is -1.
 function start_burn {
   window:log("Engine ignition").
   set ship:control:fore to 0.
-  set start_t to time:seconds.
+  set start_t to time:seconds + spool_up.
   set program_status to "Burning".
   rcs on.
   set ship:control:pilotmainthrottle to 1.

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Dorian Lesbre
+// This program is licensed under the GNU General Public License v3.0.
+// See <https://www.gnu.org/licenses/gpl-3.0.html> for details.
+
 // String manipulation functions, mostly for pretty printing
 
 // left pad a number with zeros
@@ -5,6 +9,16 @@ function pad_with_0 {
   parameter n. parameter len is 2.
   return n:tostring():padleft(len):replace(" ", "0").
 }
+
+// Print a number with this amount of significant digits
+function format_precision {
+  parameter n.
+  parameter precision.
+  set n to round(n, precision):tostring():split(".").
+  if n:length = 0 { return n + "." + "":padright(precision):replace(" ", "0"). }
+  return n[0] + "." + n[1]:padright(precision):replace(" ", "0").
+}
+
 
 // Print a number as 3 digits + a unit
 function format_unit {
@@ -17,6 +31,12 @@ function format_unit {
   if abs(n) >= 100 return round(n):tostring() + space + units[0].
   if abs(n) >= 10 return round(n,1):tostring() + space + units[0].
   return round(n,2):tostring() + space + units[0].
+}
+
+// Pretty-print an orbit
+function format_orbit {
+  parameter orb is orbit.
+  return format_unit(orb:apoapsis) + "m x " + format_unit(orb:periapsis) + "m @ " + round(orb:inclination,2) + "°".
 }
 
 // format duration as '[Ny ][Nd+]HH:MM:SS'

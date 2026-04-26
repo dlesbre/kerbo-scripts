@@ -1,3 +1,9 @@
+// Copyright (C) 2026 Dorian Lesbre
+// This program is licensed under the GNU General Public License v3.0.
+// See <https://www.gnu.org/licenses/gpl-3.0.html> for details.
+
+// ils.ks - Runway landing guidance for X-Planes
+
 run "0:libs/math".
 run "0:libs/gui".
 

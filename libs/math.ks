@@ -1,3 +1,8 @@
+// Copyright (C) 2026 Dorian Lesbre
+// This program is licensed under the GNU General Public License v3.0.
+// See <https://www.gnu.org/licenses/gpl-3.0.html> for details.
+
+// math.ks - Various math operation and orbital calculations
 
 // clamp(x, mini, maxi) return the element from [mini; maxi] closest to x
 function clamp {
@@ -17,6 +22,10 @@ function linear_interpolation {
 	local a is (y1 - y0) / (x1 - x0).
 	return a*x2 + (y1 - a*x1).
 }
+
+// =============================================================================
+// Vector operations
+// =============================================================================
 
 function vector_heading{
 	parameter vector.
@@ -46,6 +55,16 @@ function vector_clamp{
 	if t_ang <= ang return v2.
 	return cos(ang)*v1 + sin(ang)*vector_orthogonal(v1,v2).
 }
+
+// signed_vang(va, vb, vn) is the angle (in degrees) between va and vb, oriented
+// by vn in right-handed notation. Ranges between -179.99° and 180°.
+function signed_vang {
+  parameter va, vb, vn. return arctan2(vcrs(va,vb)*vn, va*vb).
+}
+
+// =============================================================================
+// Orbital calculations
+// =============================================================================
 
 function orbit_from_pe_ap {
 	parameter pe.
@@ -114,11 +133,82 @@ function time_to_orbit {
 	return velocity_diff / accel.
 }
 
-function orbit_normal { parameter o.
+// Normal vector of an orbit (the purple vector in KSP's maneuver nodes)
+function orbit_normal {
+	parameter o.
 	return vcrs(o:velocity:orbit, o:position - o:body:position):normalized().
 }
 
+// Mean anomaly from true anomaly
+function mean_anomaly {
+	parameter orb.
+	parameter true_anomaly is orb:trueAnomaly.
+	local e is orb:eccentricity.
+	local tmp is sqrt(1-e^2) * sin(true_anomaly).
+	// https://en.wikipedia.org/wiki/Mean_anomaly#Formulae
+	return arcTan2(tmp, e + cos(true_anomaly)) - e * tmp / (1 + e * cos(true_anomaly)) * constant:radtodeg.
+
+}
+
+// Time to a point on the orbit, specified by its mean anomaly
+// Returns a value between 0 and orb:period.
+function time_to_mean_anomaly {
+	parameter orb.
+	parameter mean_anom.
+	local mean_anomaly_diff is mean_anom - mean_anomaly(orb).
+	if mean_anomaly_diff < 0 { set mean_anomaly_diff to 360 + mean_anomaly_diff. }
+	return mean_anomaly_diff / 360 * orb:period.
+}
+
+// Time to a point on the orbit, specified by its true anomaly
+// Returns a value between 0 and 1*orb:period.
+function time_to_true_anomaly {
+	parameter orb.
+	parameter true_anomaly.
+	return time_to_mean_anomaly(orb, mean_anomaly(orb, true_anomaly)).
+}
+
+// Time to periapsis, between 0 and orb:period.
+function time_to_periapsis {
+	parameter orb is orbit.
+	return time_to_mean_anomaly(orb, 0).
+}
+
+// Time to apoapsis, between 0 and orb:period.
+function time_to_apoapsis {
+	parameter orb is orbit.
+	return time_to_mean_anomaly(orb, 180).
+}
+
+// =============================================================================
+// Relative inclination and AN between two orbits
+// =============================================================================
+
+// Unsigned relative inclination between the two orbits
+//: (Orbit, Orbit) -> Scalar<deg>
 function relative_inclination {
 	parameter obt1, obt2.
+	// Relative incl is simply the angle between the normal vectors
 	return vang(orbit_normal(obt1), orbit_normal(obt2)).
+}
+
+// Angle between current position on obt1 and the relative AN of obt1 and obt2
+// I.E. angle (obt1:position -- body center -- relative AN).
+// Ranges between -179.99° to 180°. 0° means we are at AN, 180° that we are at DN.
+function angle_to_relative_AN {
+	parameter obt1, obt2.
+	local obt1_normal is orbit_normal(obt1).
+	return signed_vang(
+		vcrs(obt1_normal, orbit_normal(obt2)),
+		obt1:position - obt1:body:position,
+		obt1_normal).
+}
+
+function phase_angle {
+	parameter obt1, obt2.
+	return signed_vang(
+		obt1:position - obt1:body:position,
+		obt2:position - obt2:body:position,
+		orbit_normal(obt1)
+	).
 }

@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Dorian Lesbre
+// This program is licensed under the GNU General Public License v3.0.
+// See <https://www.gnu.org/licenses/gpl-3.0.html> for details.
+
 // main.ks - Main program, opens a GUI with a flight log that allows selecting
 // various autopilot scripts
 // =============================================================================
@@ -26,6 +30,7 @@ local program_list is list(
   "Ascent",
   "Maneuver",
   "Point to sun",
+  "Rendez vous",
   "Part explorer"
 ).
 
@@ -98,6 +103,7 @@ local ec_amount is -1.
 local ec_percent is "none".
 window:set_readouts(readouts).
 until false {
+  set run_pgrm_btn:enabled to homeConnection:isconnected.
   if current_program <> "" {
     runpath("0:" + current_program:tolower():replace(" ", "_")).
 

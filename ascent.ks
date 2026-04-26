@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Dorian Lesbre
+// This program is licensed under the GNU General Public License v3.0.
+// See <https://www.gnu.org/licenses/gpl-3.0.html> for details.
+
 // ascent.ks - Earth ascent script.
 //   Autopilot with simple gravity turn in low atmosphere
 //   Manual pitch control to circularize
@@ -7,7 +11,9 @@
 // #include "main.ks"
 run once "0:/libs/math".
 
-// Settings per launch vehicule
+// Settings per launch vehicule - To indicate which LV is used, tag a part of
+// the launch vehicule with "LV: XXX" as a tag. I typically tag the first-stage
+// avionics (ex: "LV: Mustang F")
 local lv_settings is lexicon(
 	"default", lexicon("turn_start", 50, "turn_angle", 10, "extra_pitch", 1, "roll", 90),
 	"Mustang F", lexicon("turn_angle", 5, "extra_pitch", 0.5),
@@ -15,6 +21,8 @@ local lv_settings is lexicon(
 ).
 
 local preset is lv_settings["default"].
+
+// Look for any "LV: XXX" tag in the launch vehicule
 local tags is ship:partstaggedpattern("^LV:").
 if tags:length > 0 {
 	local lv_name is tags[0]:tag:substring(3, tags[0]:tag:length - 3):trim().
@@ -42,17 +50,13 @@ local extra_pitch is preset:extra_pitch.
 local spool_stage is true.
 local follow_prograde is false.
 
-// TestFlight: ModuleEnginesRF
-// status = Failed
-// cause = Failed to ignite
-
 // Inspired by https://www.reddit.com/r/KerbalSpaceProgram/comments/jzk3kn/comment/gdc9gbu/
 local warp_margin is 300. // s
 local warp_LAN_diff is 0. // deg
 function warp_to_LAN {
 	if status = "prelaunch" or status = "landed" {
 		if lan = 1000 {
-			set lan to target:orbit:lan.
+			set lan to round(target:orbit:lan,4).
 			set inc to target:orbit:inclination.
 		}
 		local tlan is mod(360 + lan - body:rotationangle + warp_LAN_diff, 360).
@@ -77,13 +81,20 @@ function warp_to_LAN {
 	}
 }
 
+function stage_name {
+	parameter name.
+	parameter log_g is false.
+	parameter log_twr is false.
+	return lexicon("name", name, "log_g", log_g, "log_twr", log_twr).
+}
+
 set stage_names to list(
-	"Engine ignition",
-	"Liftoff",
-	"Booster separation",
-	"First stage separation",
-	"Second stage Ignition",
-	"Payload release"
+	stage_name("Engine ignition"),
+	stage_name("Liftoff", false, true),
+	stage_name("Booster separation", true),
+	stage_name("First stage separation", true),
+	stage_name("Second stage Ignition"),
+	stage_name("Payload release")
 ).
 
 function deploy_fairings {
@@ -272,13 +283,20 @@ when interrupt or ship_bounds:bottomaltradar > tower_clear_alt then {
 	window:log("Tower cleared").
 }
 
+lock TWR to max(.001, ship:maxthrust/(ship:mass*g)).
+local max_g is 0.
 local stage_number is stage:number.
 local stage_count is 0.
 local stage_time is -1.
 when interrupt or stage_number <> stage:number then {
 	if interrupt return false.
-	if stage_count < stage_names:length
-		window:log(stage_names[stage_count]).
+	if stage_count < stage_names:length {
+		local stage_info is stage_names[stage_count].
+		local message is stage_info:name.
+		if stage_info:log_twr { set message to message + " - TWR: " + round(TWR, 2). }
+		if stage_info:log_g { set message to message + " - " + round(max_g,2) + "g". set max_g to 0. }
+		window:log(message).
+	}
 	else window:log("Stage " + stage_count).
 	set stage_count to stage_count + 1.
 	set stage_number to stage:number.
@@ -306,7 +324,6 @@ when interrupt or orbit:periapsis > pe * 1000 then {
 	}
 }
 
-lock TWR to max(.001, ship:maxthrust/(ship:mass*g)).
 local max_q is dynamic_pressure().
 local max_q_t is missionTime.
 local settings_t is 0.
@@ -354,13 +371,14 @@ until interrupt {
 		window:log("Passed max Q = " + format_unit(max_q, " ") + "Pa").
 		set max_q_t to -1.
 	}
+	set max_g to max(max_g, ship:maxthrust/(ship:mass*constant:g0)).
 
 	local true_pitch is vector_pitch(ship:facing:forevector).
 	// Roll is undefined if facing roof
 	local roll_up is vector_orthogonal(ship:facing:forevector, up:vector).
 	local roll is choose vang(ship:facing:topvector, roll_up) if roll_up:mag > 0 else cmd_roll.
 	local readouts is lexicon(
-		"Orbit", format_unit(orbit:apoapsis) + "m x " + format_unit(orbit:periapsis) + "m @ " + round(orbit:inclination,2) + "°",
+		"Orbit", format_orbit(),
 		"P,H,R",
 			"" + pp_attitude(true_pitch, cmd_pitch) +
 			", " + pp_attitude(choose vector_heading(ship:facing:forevector) if abs(90 - true_pitch) > 0.01 else cmd_hdg, cmd_hdg) +
@@ -413,14 +431,16 @@ until interrupt {
 			set pitch_ctrl:visible to true.
 			set state to "Manual flight".
 			if lan < 1000
-				window:set_readouts(list("Orbit", "P,H,R", "Time to orbit", "Relative incl", "TWR", "Status")).
-			else window:set_readouts(list("Orbit", "P,H,R", "Time to orbit", "TWR", "Status")).
+				window:set_readouts(list("Orbit", "P,H,R", "Time to orbit / AP", "Relative incl", "TWR", "Status")).
+			else window:set_readouts(list("Orbit", "P,H,R", "Time to orbit / AP", "TWR", "Status")).
 		}
 	}
 	if state = "Manual flight" {
 		set cmd_pitch to pitch_input_val.
 		readouts:remove("Angle on prograde").
-		set readouts["Time to orbit"] to round(time_to_orbit(pe,ap)):tostring() + "s".
+		local time_to_ap is time_to_apoapsis().
+		if time_to_ap > obt:period / 2 { set time_to_ap to time_to_ap - obt:period. }
+		set readouts["Time to orbit / AP"] to round(time_to_orbit(pe,ap)):tostring() + "s / " + round(time_to_ap):tostring() + "s".
 		if lan < 1000 {
 			local tgt_obt is orbit_from_pe_ap(pe,ap,ship:body,inc,lan).
 			set readouts["Relative incl"] to round(relative_inclination(orbit, tgt_obt), 3) + "°".
