@@ -23,6 +23,8 @@ if not is_min_cpu() {
 }
 
 wait until homeConnection:isConnected.
+
+
 run once "0:/libs/gui".
 run once "0:/libs/parts".
 
@@ -106,7 +108,7 @@ window:set_readouts(readouts).
 until false {
   set run_pgrm_btn:enabled to homeConnection:isconnected.
   if current_program <> "" {
-    runpath("0:" + current_program:tolower():replace(" ", "_")).
+    runpath("0:scripts/" + current_program:tolower():replace(" ", "_")).
 
     set current_program to "".
     set current_program_display:visible to false.
