@@ -1,3 +1,7 @@
+// Copyright (C) 2026 Dorian Lesbre
+// This program is licensed under the GNU General Public License v3.0.
+// See <https://www.gnu.org/licenses/gpl-3.0.html> for details.
+
 // #include "../libs/string.ks"
 
 run "0:libs/string".
@@ -35,7 +39,7 @@ function create_readouts {
   function set_style{ parameter label.
     set label:style:margin:v to 0.
     set label:style:margin:h to 10.
-    set label:style:hstretch to true.
+    //set label:style:hstretch to true.
   }
 
   for readout in readouts {
@@ -341,4 +345,34 @@ function create_gui {
     "readout_box", readouts_box,
     "program_selector", program_selector
   ).
+}
+
+// Create a simple numeric input field with -10/-1 +10/+1 buttons.
+function create_controls {
+  parameter hlayout.
+  parameter label.
+  parameter onchange.
+  parameter value is 0.
+
+  hlayout:addlabel(label).
+  local btn_m10 is hlayout:addbutton("-10").
+  local btn_m1 is hlayout:addbutton("-1").
+  local input is hlayout:addtextfield(value:tostring()).
+  set input:onconfirm to {
+    set value to input:text:toscalar(value).
+    set input:text to value:tostring().
+    onchange(value).
+  }.
+  local btn_p1 is hlayout:addbutton("+1").
+  local btn_p10 is hlayout:addbutton("+10").
+  function change_value{ parameter amount.
+    set value to value + amount.
+    set input:text to value:tostring().
+    onchange(value).
+  }
+  set btn_m10:onclick to change_value@:bind(-10).
+  set btn_m1:onclick to change_value@:bind(-1).
+  set btn_p1:onclick to change_value@:bind(1).
+  set btn_p10:onclick to change_value@:bind(10).
+  return input.
 }

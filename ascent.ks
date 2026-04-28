@@ -9,7 +9,9 @@
 // =============================================================================
 
 // #include "main.ks"
+run once "0:/libs/orbital".
 run once "0:/libs/math".
+
 
 // Settings per launch vehicule - To indicate which LV is used, tag a part of
 // the launch vehicule with "LV: XXX" as a tag. I typically tag the first-stage
@@ -50,35 +52,18 @@ local extra_pitch is preset:extra_pitch.
 local spool_stage is true.
 local follow_prograde is false.
 
-// Inspired by https://www.reddit.com/r/KerbalSpaceProgram/comments/jzk3kn/comment/gdc9gbu/
 local warp_margin is 300. // s
 local warp_LAN_diff is 0. // deg
 function warp_to_LAN {
-	if status = "prelaunch" or status = "landed" {
-		if lan = 1000 {
-			set lan to round(target:orbit:lan,4).
-			set inc to target:orbit:inclination.
-		}
-		local tlan is mod(360 + lan - body:rotationangle + warp_LAN_diff, 360).
-		local tldn is mod(tlan + 180, 360).
-
-		local incl is max(ceiling(abs(latitude),4), round(inc,4)).
-		local gamma is arcsin(cos(incl) / cos(latitude)).
-		local delta is arccos(cos(gamma) / sin(incl)).
-		if latitude < 0 set delta to -delta.
-
-		// Calculate differences between target and ship
-		local lon_diff_AN is mod(360 + tlan - longitude + delta, 360). // deg
-		local lon_diff_DN is mod(360 + tldn - longitude - delta, 360). // deg
-
-		local lon_diff is min(lon_diff_AN, lon_diff_DN). //DN first
-		local rot_rate is 360/BODY:ROTATIONPERIOD. // deg/s
-
-		local wait_time is lon_diff/rot_rate. // seconds
-		window:log("Warping to " + (choose "LAN" if lon_diff_AN < lon_diff_DN else "LDN") + " in " + format_HH_MM_SS(wait_time)).
-		window:update_settings(lexicon("orbit", lexicon("northbound", lon_diff_AN < lon_diff_DN, "inc", incl, "lan", lan))).
-		kuniverse:timewarp:warpto(time:seconds + wait_time - warp_margin).
+	if lan = 1000 {
+		set lan to round(target:orbit:lan,4).
+		set inc to target:orbit:inclination.
 	}
+	set inc to max(ceiling(abs(latitude),4), round(inc,4)).
+	local info is time_to_zenith(inc, lan + warp_LAN_diff - warp_margin * 360 / body:rotationperiod, latitude, longitude).
+	window:log("Warping to " + (choose "LAN" if info:northbound else "LDN") + " in " + format_HH_MM_SS(info:time+warp_margin)).
+	window:update_settings(lexicon("orbit", lexicon("northbound", info:northbound, "inc", inc, "lan", lan))).
+	kuniverse:timewarp:warpto(time:seconds + info:time).
 }
 
 function stage_name {
@@ -238,24 +223,7 @@ set warp_to_pane:visible to false.
 // Pitch input for circularization
 local pitch_input_val is 45.
 local pitch_ctrl is window:panel:addhlayout().
-local pitch_lbl is pitch_ctrl:addlabel("Pitch:").
-local pitch_btn_m10 is pitch_ctrl:addbutton("-10").
-local pitch_btn_m1 is pitch_ctrl:addbutton("-1").
-local pitch_input is pitch_ctrl:addtextfield("0").
-set pitch_input:text to pitch_input_val:tostring().
-set pitch_input:onconfirm to {
-	set pitch_input_val to pitch_input:text:toscalar(pitch_input_val).
-	set pitch_input:text to pitch_input_val:tostring().
-}.
-local pitch_btn_p1 is pitch_ctrl:addbutton("+1").
-local pitch_btn_p10 is pitch_ctrl:addbutton("+10").
-function change_pitch{ parameter amount.
-	set pitch_input_val to pitch_input_val + amount.
-	set pitch_input:text to pitch_input_val:tostring(). }
-set pitch_btn_m10:onclick to change_pitch@:bind(-10).
-set pitch_btn_m1:onclick to change_pitch@:bind(-1).
-set pitch_btn_p1:onclick to change_pitch@:bind(1).
-set pitch_btn_p10:onclick to change_pitch@:bind(10).
+create_controls(pitch_ctrl, "Pitch:", {parameter v. set pitch_input_val to v. }, pitch_input_val).
 set pitch_ctrl:visible to false.
 
 local on_switch is window:panel:addbutton("Engage autopilot").
@@ -324,7 +292,7 @@ when interrupt or orbit:periapsis > pe * 1000 then {
 	}
 }
 
-local max_q is dynamic_pressure().
+local max_q is 0.
 local max_q_t is missionTime.
 local settings_t is 0.
 
@@ -362,7 +330,7 @@ until interrupt {
 		)).
 	}
 	check_engines().
-	local cur_q is dynamic_pressure().
+	local cur_q is ship:dynamicPressure * constant:atmToKPa * 1000.
 	if (cur_q > max_q) {
 		set max_q to cur_q.
 		set max_q_t to missionTime.
@@ -442,7 +410,7 @@ until interrupt {
 		if time_to_ap > obt:period / 2 { set time_to_ap to time_to_ap - obt:period. }
 		set readouts["Time to orbit / AP"] to round(time_to_orbit(pe,ap)):tostring() + "s / " + round(time_to_ap):tostring() + "s".
 		if lan < 1000 {
-			local tgt_obt is orbit_from_pe_ap(pe,ap,ship:body,inc,lan).
+			local tgt_obt is orbit_of_pe_ap(pe,ap,ship:body,inc,lan).
 			set readouts["Relative incl"] to round(relative_inclination(orbit, tgt_obt), 3) + "°".
 		}
 	}

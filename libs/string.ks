@@ -2,7 +2,7 @@
 // This program is licensed under the GNU General Public License v3.0.
 // See <https://www.gnu.org/licenses/gpl-3.0.html> for details.
 
-// String manipulation functions, mostly for pretty printing
+// libs/string.ks - String manipulation functions, mostly for pretty printing
 
 // left pad a number with zeros
 function pad_with_0 {
@@ -80,4 +80,22 @@ function format_angle {
   if precision > 0 { set res to res + " " + pad_with_0(mod(round(angle*60), 60)) + "'".
   if precision > 1 { set res to res + " " + pad_with_0(mod(round(angle*3600), 60)) + "''".
   }} return res.
+}
+
+// Compact string representation of a list
+function format_list {
+  parameter lst. // : List<'a>
+  parameter sep is "\n".
+  parameter print_pos is true.
+  parameter formatter is { parameter elt. return elt:tostring(). }. // : 'a -> String
+  local str is "".
+  local i is 0.
+  for elt in lst {
+    set str to str +
+      (choose i:tostring() + ": " if print_pos else "") +
+      formatter(elt) +
+      (choose sep if i < lst:length - 1 else "").
+    set i to i+1.
+  }
+  return str.
 }

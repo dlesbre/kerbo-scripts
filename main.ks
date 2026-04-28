@@ -30,6 +30,7 @@ local program_list is list(
   "Ascent",
   "Maneuver",
   "Point to sun",
+  "Landing",
   "Rendez vous",
   "Part explorer"
 ).

@@ -105,7 +105,7 @@ set execute:ontoggle to {
       sas off.
       rcs on.
       set orient to nextNode:deltav.
-      lock steering to orient.
+      lock steering to lookDirUp(orient, ship:facing:topvector).
       set program_status to "Pointing to node".
       set avionics_were_off to activate_avionics().
       when (not autopilot_running or (hasNode and nextNode:eta - spool_up < ullage_time)) then {
