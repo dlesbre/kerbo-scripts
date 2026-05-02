@@ -5,10 +5,21 @@
 // maneuver.ks - Execute next maneuver node, with various stop burn conditions
 // =============================================================================
 
-// #include "main.ks"
+// #include "0:main"
+run once "0:libs/math".
 
 local ullage_time is choose 4 if engine_ullage() else 0.
 local spool_up is round(engine_spool_up_time(),2).
+
+// Estimate burn time from delta-v, if no staging
+function get_burn_t {
+  if not hasNode { return "". }
+  local engines is active_engines().
+  local thrust is engine_thrust(engines).
+  if thrust = 0 { return "". }
+  local massflow is engine_max_mass_flow(engines).
+  return round(burn_time(nextNode:deltav:mag, thrust, massflow),1):tostring().
+}
 
 window:set_settings(list(
     lexicon("type", "input", "name", "ullage", "label", "RCS ullage", "unit", "s"),
@@ -30,7 +41,7 @@ window:gui:show().
 window:update_settings(lexicon(
   "ullage", ullage_time,
   "follow_node", true,
-  "stop_cond", "Burn Time",
+  "stop_cond", "Burn Time", "burn_t", get_burn_t(),
   "pe_ge", 200, "pe_le", 200, "ap_le", 200, "ap_ge", 200,
   "spool_up", spool_up
 )).

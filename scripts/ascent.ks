@@ -8,32 +8,14 @@
 //   Allows launching into a specific inclination, or even a specific plane.
 // =============================================================================
 
-// #include "main.ks"
+// #include "0:main"
 run once "0:/libs/orbital".
 run once "0:/libs/math".
+run once "0:/libs/parts".
 
+run once "0:libs/launch_vehicules".
 
-// Settings per launch vehicule - To indicate which LV is used, tag a part of
-// the launch vehicule with "LV: XXX" as a tag. I typically tag the first-stage
-// avionics (ex: "LV: Mustang F")
-local lv_settings is lexicon(
-	"default", lexicon("turn_start", 50, "turn_angle", 10, "extra_pitch", 1, "roll", 90),
-	"Mustang F", lexicon("turn_angle", 5, "extra_pitch", 0.5),
-	"Stallion", lexicon("turn_start", 60, "turn_angle", 3, "extra_pitch", 0.15, "roll", 0)
-).
-
-local preset is lv_settings["default"].
-
-// Look for any "LV: XXX" tag in the launch vehicule
-local tags is ship:partstaggedpattern("^LV:").
-if tags:length > 0 {
-	local lv_name is tags[0]:tag:substring(3, tags[0]:tag:length - 3):trim().
-	if lv_settings:hasKey(lv_name) {
-		for key in lv_settings[lv_name]:keys() {
-			set preset[key] to lv_settings[lv_name][key].
-		}
-	}
-}
+local preset is get_lv_settings().
 
 lock g to earth:mu / (altitude + earth:radius)^2.
 
@@ -51,6 +33,7 @@ local turn_angle is preset:turn_angle.
 local extra_pitch is preset:extra_pitch.
 local spool_stage is true.
 local follow_prograde is false.
+local stage_names is preset:stage_names.
 
 local warp_margin is 300. // s
 local warp_LAN_diff is 0. // deg
@@ -65,22 +48,6 @@ function warp_to_LAN {
 	window:update_settings(lexicon("orbit", lexicon("northbound", info:northbound, "inc", inc, "lan", lan))).
 	kuniverse:timewarp:warpto(time:seconds + info:time).
 }
-
-function stage_name {
-	parameter name.
-	parameter log_g is false.
-	parameter log_twr is false.
-	return lexicon("name", name, "log_g", log_g, "log_twr", log_twr).
-}
-
-set stage_names to list(
-	stage_name("Engine ignition"),
-	stage_name("Liftoff", false, true),
-	stage_name("Booster separation", true),
-	stage_name("First stage separation", true),
-	stage_name("Second stage Ignition"),
-	stage_name("Payload release")
-).
 
 function deploy_fairings {
 	local fairing_bases is list().
@@ -223,7 +190,7 @@ set warp_to_pane:visible to false.
 // Pitch input for circularization
 local pitch_input_val is 45.
 local pitch_ctrl is window:panel:addhlayout().
-create_controls(pitch_ctrl, "Pitch:", {parameter v. set pitch_input_val to v. }, pitch_input_val).
+create_controls(pitch_ctrl, "Pitch:", {parameter val. set pitch_input_val to val. }, pitch_input_val).
 set pitch_ctrl:visible to false.
 
 local on_switch is window:panel:addbutton("Engage autopilot").
@@ -408,7 +375,7 @@ until interrupt {
 		readouts:remove("Angle on prograde").
 		local time_to_ap is time_to_apoapsis().
 		if time_to_ap > obt:period / 2 { set time_to_ap to time_to_ap - obt:period. }
-		set readouts["Time to orbit / AP"] to round(time_to_orbit(pe,ap)):tostring() + "s / " + round(time_to_ap):tostring() + "s".
+		set readouts["Time to orbit / AP"] to round(time_to_orbit(pe,ap,engine_max_mass_flow())):tostring() + "s / " + round(time_to_ap):tostring() + "s".
 		if lan < 1000 {
 			local tgt_obt is orbit_of_pe_ap(pe,ap,ship:body,inc,lan).
 			set readouts["Relative incl"] to round(relative_inclination(orbit, tgt_obt), 3) + "°".

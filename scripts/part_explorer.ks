@@ -93,8 +93,8 @@ function part_info {
   part_details_layout:clear().
   part_details_layout:addlabel("Name: " + part:name).
   part_details_layout:addlabel("Title: " + part:title).
-  part_details_layout:addlabel("Mass: " + part:mass + "t").
-  part_details_layout:addlabel("Stage: " + part:stage).
+  part_details_layout:addlabel("Type: " + part:typename).
+  part_details_layout:addlabel("Mass: " + part:mass + "t  Stage: " + part:stage + "  Decouplein: " + part:decoupledin).
   // part_details_layout:addlabel("P: " + part:position + "   R: " + part:rotation).
   if part:hasparent {
     local hbox is part_details_layout:addhlayout().

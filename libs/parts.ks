@@ -5,6 +5,8 @@
 // libs/parts.ks - various utility function for manipulating vessel parts
 // =============================================================================
 
+run once "0:libs/fun.ks".
+
 // get_field checks for field existence before getting it, else returns the default
 function get_field {
   parameter module.
@@ -12,17 +14,6 @@ function get_field {
   parameter default.
   if module:hasField(field) { return module:getField(field). }
   return default.
-}
-
-// list_filter(f, l) is the sublist of elements of l that verify f
-function list_filter {
-  parameter filter. // : 'a -> Boolean
-  parameter lst. // : List<'a>
-  local res is list().
-  for elt in lst {
-    if filter(elt) { res:add(elt). }
-  }
-  return res.
 }
 
 // =============================================================================
@@ -183,4 +174,16 @@ function engine_residuals {
   if not engine:hasmodule(MOD_ENGINE_RF) return 0.
   local module is engine:getmodule(MOD_ENGINE_RF).
   return get_field(module, FLD_ENGINE_RESIDUALS, 0).
+}
+
+// Sum of thrust from all specified engines
+function engine_thrust {
+  parameter engines is active_engines().
+  return list_sum({parameter engine. return engine:possiblethrust.}, engines).
+}
+
+// Sum of mass flow from all specified engines
+function engine_max_mass_flow {
+  parameter engines is active_engines().
+  return list_sum({parameter engine. return engine:maxmassflow.}, engines).
 }

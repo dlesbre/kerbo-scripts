@@ -61,6 +61,8 @@ function signed_vang {
   parameter va, vb, vn. return arctan2(vcrs(va,vb)*vn, va*vb).
 }
 
+// burn_time(deltav, thrust, massflow, [mass]) is the time it takes to change
+// velocity by deltav at the specified thrust and massflow.
 function burn_time {
 	parameter deltav. // in m/s
 	parameter thrust. // in kN
@@ -79,9 +81,11 @@ function burn_time {
 function time_to_orbit {
 	parameter pe. // in m
 	parameter ap. // in m
-	local accel is ship:maxthrust / ship:mass.
-	if accel = 0 { return 0. }
-	local velocity_diff is orbital_speed(pe,pe,ap) - velocity:orbit:mag.
-	if velocity_diff < 0 { return 0. }
-	return velocity_diff / accel.
+	parameter massflow. // in t/s (Mg/s)
+	parameter thrust is ship:maxthrust. // in kN
+	parameter init_mass is ship:mass.
+	if thrust = 0 { return -1. }
+	local deltav is orbital_speed(pe,pe,ap) - velocity:orbit:mag.
+	if deltav < 0 { return 0. }
+	return burn_time(deltav, thrust, massflow, init_mass).
 }
