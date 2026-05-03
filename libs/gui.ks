@@ -353,19 +353,26 @@ function create_controls {
   parameter label.
   parameter onchange.
   parameter value is 0.
-
+  parameter special_values is list().
+  parameter get_value is { return value. }.
   hlayout:addlabel(label).
   local btn_m10 is hlayout:addbutton("-10").
   local btn_m1 is hlayout:addbutton("-1").
   local input is hlayout:addtextfield(value:tostring()).
   set input:onconfirm to {
-    set value to input:text:toscalar(value).
-    set input:text to value:tostring().
-    onchange(value).
+    if special_values:contains(input:text) {
+      onchange(input:text).
+    }
+    else {
+      set value to input:text:toscalar(value).
+      set input:text to value:tostring().
+      onchange(value).
+    }
   }.
   local btn_p1 is hlayout:addbutton("+1").
   local btn_p10 is hlayout:addbutton("+10").
   function change_value{ parameter amount.
+    if special_values:contains(input:text) { set value to get_value. }
     set value to value + amount.
     set input:text to value:tostring().
     onchange(value).

@@ -7,6 +7,7 @@
 // =============================================================================
 
 function is_min_cpu {
+  if core:bootfilename = "None" { return true. }
   for cpu in ship:modulesnamed("kosProcessor") {
     if cpu:bootfilename = core:bootfilename and cpu:mode = "ready" and cpu:part:cid < core:part:cid
       return false.

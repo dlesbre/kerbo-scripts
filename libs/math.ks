@@ -22,6 +22,9 @@ function linear_interpolation {
 	return a*x2 + (y1 - a*x1).
 }
 
+// The exponential function
+function exp { parameter x. return constant:e^x. }
+
 // =============================================================================
 // Vector operations
 // =============================================================================
@@ -89,3 +92,32 @@ function time_to_orbit {
 	if deltav < 0 { return 0. }
 	return burn_time(deltav, thrust, massflow, init_mass).
 }
+
+// =============================================================================
+// Hyperbolic trigonometry
+// =============================================================================
+// Hyperbolic trigonometric functions are essentially the same as the usual trig
+// function, only replacing e^(ix) by e^x. Useful for calculation on hyperbolic
+// orbits
+
+// Hyperbolic sine, return value can be any real
+function sinh { parameter x. return (exp(x) - exp(-x)) / 2. }
+
+// Hyperbolic cosine, return value is >= 1.
+function cosh { parameter x. return (exp(x) + exp(-x)) / 2. }
+
+// Hyperbolic tangent, return value is in ]-1:1[
+// tanh(x) = sinh(x) / cosh(x), inlined to limit calls to exp.
+function tanh { parameter x.
+	local ex is exp(x).
+	local emx is exp(-x).
+	return (ex - emx) / (ex + emx).
+}
+
+function arcsinh { parameter x. return ln(x + sqrt(x^2 + 1)). }
+
+// Only defined if x >= 1.
+function arccosh { parameter x. return ln(x + sqrt(x^2 - 1)). }
+
+// Only defined if x in ]-1:1[
+function arctanh { parameter x. return ln((1+x) / (1-x))/2. }

@@ -61,6 +61,52 @@ function shutdown_avionics {
 }
 
 // =============================================================================
+// Solar Panels
+// =============================================================================
+
+local MOD_SOLAR is "ModuleROSolar".
+local EVT_EXTEND_SOLAR is "extend solar panel".
+local EVT_RETRACT_SOLAR is "retract solar panel".
+
+// Information about solar panel deployement:
+// one of:
+//  - None: no solar panels
+//  - Fixed: solar panels cannot be deployed or retracted
+//  - Deployed: can be retracted
+//  - Retracted: can be deployed
+//  - Mixed: some can be deployed, some can be retracted
+function solar_panels_status {
+  local panel_status is "None".
+  for module in ship:modulesNamed(MOD_SOLAR) {
+    if module:hasEvent(EVT_EXTEND_SOLAR) {
+      if panel_status = "None" or panel_status = "Fixed" { set panel_status to "Retracted". }
+      else if panel_status = "Deployed" { set panel_status to "Mixed". }
+    }
+    if module:hasEvent(EVT_RETRACT_SOLAR) {
+      if panel_status = "None" or panel_status = "Fixed" { set panel_status to "Deployed". }
+      else if panel_status = "Retracted" { set panel_status to "Mixed". }
+    }
+    else if panel_status = "None" { set panel_status to "Fixed". }
+  }
+  return panel_status.
+}
+
+// Deploy all possible solar panels
+function solar_panels_deploy {
+  for module in ship:modulesNamed(MOD_SOLAR) {
+    if module:hasEvent(EVT_EXTEND_SOLAR) { module:doEvent(EVT_EXTEND_SOLAR). }
+  }
+}
+
+// Retract all possible solar panels
+function solar_panels_retract {
+  for module in ship:modulesNamed(MOD_SOLAR) {
+    if module:hasEvent(EVT_RETRACT_SOLAR) { module:doEvent(EVT_RETRACT_SOLAR). }
+  }
+}
+
+
+// =============================================================================
 // Engines
 // =============================================================================
 

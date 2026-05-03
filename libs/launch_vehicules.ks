@@ -31,7 +31,7 @@ local lv_settings is lexicon(
 	"default", lexicon("turn_start", 50, "turn_angle", 10, "extra_pitch", 1, "roll", 90, "stage_names", stage_names),
 	"Mustang F", lexicon("turn_angle", 5, "extra_pitch", 0.5),
 	"Stallion", lexicon("turn_start", 60, "turn_angle", 3, "extra_pitch", 0.15, "roll", 0),
-  "Stallion B", lexicon("turn_start", 60, "turn_angle", 3.5, "extra_pitch", 0.5, "roll", 0, "stage_names", stage_names_with_SRB)
+  "Stallion B", lexicon("turn_start", 60, "turn_angle", 3, "extra_pitch", 0.5, "roll", 0, "stage_names", stage_names_with_SRB)
 ).
 
 function get_lv_settings {
