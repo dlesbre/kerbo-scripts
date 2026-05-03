@@ -9,21 +9,32 @@
 run once "0:libs/orbital".
 run once "0:libs/math".
 
+local roll is 0.
+
 window:set_readouts(list("Altitude", "Speed H/V", "Time to impact", "Time to 0 m/s")).
+window:set_settings(list(lexicon("type", "input", "name", "roll", "label", "roll", "unit", "°"))).
+window:update_settings(lexicon("roll", roll)).
 
 
 // Pitch input for landing
 local pitch_input_val is 0.
 local pitch_ctrl is window:panel:addhlayout().
-local pitch_input is create_controls(pitch_ctrl, "Pitch:", {parameter val. set pitch_input_val to val. }, pitch_input_val).
-local vert_btn is pitch_ctrl:addbutton("Up").
-set vert_btn:onclick to { set pitch_input:text to "90". }.
+local pitch_input is create_controls(pitch_ctrl, "Pitch:",
+  {parameter val. set pitch_input_val to val.}, pitch_input_val, list("R"),
+  { return -vector_pitch(velocity:surface).}).
+local retro_btn is pitch_ctrl:addbutton("R").
+set retro_btn:onclick to {
+  set pitch_input:text to "R".
+  set pitch_input_val to "R".
+}.
+local vert_btn is pitch_ctrl:addbutton("U").
+set vert_btn:onclick to { set pitch_input:text to "90". set pitch_input_val to 90. }.
 
 
-
+lock pitch_in to choose -vector_pitch(velocity:surface) if pitch_input_val = "R" else pitch_input_val.
 lock cmd_dir to
-  choose heading(vector_heading(-velocity:surface), pitch_input_val, 0)
-  if pitch_input_val <> 90
+  choose heading(vector_heading(-velocity:surface), pitch_in, roll)
+  if pitch_in <> 90
   else lookDirUp(up:forevector, ship:facing:topvector).
 
 local on_switch is window:panel:addbutton("Engage autopilot").
@@ -47,8 +58,10 @@ local cancel_h_vel is window:panel:addbutton("Cancel horizontal velocity").
 set cancel_h_vel:toggle to true.
 set cancel_h_vel:onclick to {
   if cancel_h_vel:pressed {
-    set pitch_input_val to 90.
+    set on_switch:pressed to true.
+    on_switch:onclick().
     set pitch_input:text to "90".
+    set pitch_input_val to 90.
     rcs on.
   }
   else {
@@ -67,7 +80,12 @@ local ship_bounds is ship:bounds().
 local stage_nb is -1.
 local thrust is -1000.
 local massflow is -1000.
+local last_t is 0.
 until interrupt {
+  if time:seconds - last_t > 1 {
+    local settings is window:get_settings().
+    set roll to settings:roll:toScalar(roll).
+  }
 
   if ship:stagenum <> stage_nb {
     set ship_bounds to ship:bounds().

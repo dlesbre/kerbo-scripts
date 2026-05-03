@@ -5,6 +5,8 @@
 // part_explorer.ks - Handy GUI to inspect part/modules in a vessel
 // =============================================================================
 
+// #include "0:main"
+
 local window is GUI(500,700).
 set window:draggable to true.
 
