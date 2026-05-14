@@ -372,8 +372,8 @@ function create_controls {
   local btn_p1 is hlayout:addbutton("+1").
   local btn_p10 is hlayout:addbutton("+10").
   function change_value{ parameter amount.
-    if special_values:contains(input:text) { set value to get_value. }
-    set value to value + amount.
+    if special_values:contains(input:text) { set value to get_value(). }
+    set value to round(input:text:toscalar(value) + amount).
     set input:text to value:tostring().
     onchange(value).
   }

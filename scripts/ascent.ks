@@ -69,10 +69,7 @@ function deploy_fairings {
 }
 
 function deploy_LES {
-	local LES is ship:partstitledpattern("Launch Escape System").
-	if LES:length = 1 {
-		LES[0]:getmodule("ModuleEnginesRF"):doaction("activate engine", true).
-		LES[0]:getmodule("ModuleDecouple"):doaction("decouple", true).
+	if eject_LES() {
 		window:log("Launch Escape System Jettison").
 	}
 }

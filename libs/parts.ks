@@ -105,7 +105,6 @@ function solar_panels_retract {
   }
 }
 
-
 // =============================================================================
 // Engines
 // =============================================================================
@@ -232,4 +231,36 @@ function engine_thrust {
 function engine_max_mass_flow {
   parameter engines is active_engines().
   return list_sum({parameter engine. return engine:maxmassflow.}, engines).
+}
+
+// =============================================================================
+// Launch escape system
+// =============================================================================
+
+local MOD_DECOUPLE is "ModuleDecouple".
+local EVT_ACTIVATE_ENGINE is "activate engine".
+
+function has_LES {
+  return ship:partstitledpattern("Launch Escape System"):length = 1.
+}
+
+// Decouple and eject launch escape system
+function eject_LES {
+  local LES is ship:partstitledpattern("Launch Escape System").
+  if LES:length = 1 {
+    if LES[0]:istype("Engine") {
+      LES[0]:activate().
+    }
+    else if LES[0]:hasModule(MOD_ENGINE_RF) {
+      local engine_mod is LES[0]:getModule(MOD_ENGINE_RF).
+      if engine_mod:hasEvent(EVT_ACTIVATE_ENGINE) { engine_mod:doEvent(EVT_ACTIVATE_ENGINE). }
+      else { return false. }
+    }
+    else { return false. }
+    if LES[0]:hasModule(MOD_DECOUPLE) {
+      LES[0]:getmodule(MOD_DECOUPLE):doEvent("decouple").
+      return true.
+    }
+    return false.
+  }
 }

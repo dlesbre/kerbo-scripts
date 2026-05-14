@@ -22,12 +22,12 @@ local pitch_ctrl is window:panel:addhlayout().
 local pitch_input is create_controls(pitch_ctrl, "Pitch:",
   {parameter val. set pitch_input_val to val.}, pitch_input_val, list("R"),
   { return -vector_pitch(velocity:surface).}).
-local retro_btn is pitch_ctrl:addbutton("R").
+local retro_btn is pitch_ctrl:addbutton("Retro").
 set retro_btn:onclick to {
   set pitch_input:text to "R".
   set pitch_input_val to "R".
 }.
-local vert_btn is pitch_ctrl:addbutton("U").
+local vert_btn is pitch_ctrl:addbutton("Up").
 set vert_btn:onclick to { set pitch_input:text to "90". set pitch_input_val to 90. }.
 
 
@@ -107,7 +107,7 @@ until interrupt {
     "Altitude", format_unit(ship_bounds:bottomaltradar) + "m",
     "Speed H/V", format_unit(ship:groundspeed) +"m/s / " + format_unit(ship:verticalspeed) + "m/s",
     "Time to impact", choose "--" if time_to_impact < 0 else round(time_to_impact,1) + "s",
-    "Time to 0 m/s", round(burn_time(velocity:surface:mag, thrust, massflow),2) + "s"
+    "Time to 0 m/s", choose "--" if thrust=0 else round(burn_time(velocity:surface:mag, thrust, massflow),2) + "s"
   )).
 
   wait 0.
