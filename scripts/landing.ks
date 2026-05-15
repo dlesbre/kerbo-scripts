@@ -85,6 +85,7 @@ until interrupt {
   if time:seconds - last_t > 1 {
     local settings is window:get_settings().
     set roll to settings:roll:toScalar(roll).
+    set last_t to time:seconds.
   }
 
   if ship:stagenum <> stage_nb {
