@@ -360,11 +360,10 @@ function create_controls {
   local btn_m1 is hlayout:addbutton("-1").
   local input is hlayout:addtextfield(value:tostring()).
   set input:onconfirm to {
-    if special_values:contains(input:text) {
-      onchange(input:text).
-    }
+    parameter text.
+    if special_values:contains(text) { onchange(text). }
     else {
-      set value to input:text:toscalar(value).
+      set value to text:toscalar(value).
       set input:text to value:tostring().
       onchange(value).
     }

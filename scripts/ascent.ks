@@ -161,6 +161,14 @@ window:update_settings(lexicon(
 	"follow_prograde", follow_prograde
 )).
 
+// Choose target
+local set_target_pane is window:panel:addHLayout().
+set_target_pane:addlabel("Target: ").
+local target_moon is set_target_pane:addButton("Moon").
+set target_moon:onclick to {
+	set target to Moon.
+}.
+
 // Warp to target AN/DN
 local warp_to_pane is window:panel:addvlayout().
 local warp_to_btn is warp_to_pane:addbutton("Warp to TGT AN/DN").
@@ -270,6 +278,10 @@ until speed_trigger_index >= speed_triggers:length or not above_speed(speed_trig
 	set speed_trigger_index to speed_trigger_index + 2.
 }
 
+if vang(ship:facing:forevector, up:vector) > 0.5 {
+	error_hud_message("Ship is not pointing upwards").
+}
+
 // =============================================================================
 // Main program loop
 // =============================================================================
@@ -336,6 +348,7 @@ until interrupt {
 	}
 
 	if state = "Prelaunch" {
+		set set_target_pane:visible to not hasTarget.
 		set warp_to_pane:visible to hasTarget or lan < 1000.
 		if stage_time > 0 and time:seconds - stage_time >= spool_up_time and spool_stage {
 			stage.
@@ -343,7 +356,8 @@ until interrupt {
 		}
 		if missionTime > 0 {
 			set state to "Vertical ascent".
-			lock cmd_dir to ship:facing.
+			if not on_switch:pressed { error_hud_message("Autopilot not engaged"). }
+			lock cmd_dir to lookDirUp(up:forevector, ship:topvector).
 			set warp_to_pane:visible to false.
 		}
 	}

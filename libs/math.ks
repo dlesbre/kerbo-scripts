@@ -25,6 +25,13 @@ function linear_interpolation {
 // The exponential function
 function exp { parameter x. return constant:e^x. }
 
+// Euclidian remainder, guaranteed to be in [0:d-1]
+function remaider { parameter n,d.
+	local re is mod(n,d).
+	if re < 0 { return re + d. }
+	return re.
+}
+
 // =============================================================================
 // Vector operations
 // =============================================================================

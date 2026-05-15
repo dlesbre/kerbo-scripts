@@ -35,7 +35,8 @@ local program_list is list(
   "Point to sun",
   "Landing",
   "Rendez vous",
-  "Part explorer"
+  "Part explorer",
+  "Rover"
 ).
 
 function error_hud_message {

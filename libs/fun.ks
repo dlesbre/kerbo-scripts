@@ -26,3 +26,12 @@ function list_sum {
   for x in lst { set sum to sum + get_value(x). }
   return sum.
 }
+
+// list_max(f, [x1, ..., xn], init) is the max of {init, f(x1), ..., f(xn)}
+function list_max {
+  parameter get_value. // : 'a -> Scalar<"b>
+  parameter lst. // : List<'a>
+  parameter init.
+  for x in lst { set init to max(init, get_value(x)). }
+  return init.
+}

@@ -264,3 +264,19 @@ function eject_LES {
     return false.
   }
 }
+
+
+// =============================================================================
+// Rover Wheels
+// =============================================================================
+
+local MOD_WHEEL_DMG is "KSPWheelDamage".
+local FLD_WHEEL_FAILURE_TIME is "failure time".
+
+
+function get_wheel_dmg_modules { return ship:modulesnamed(MOD_WHEEL_DMG). }
+function wheel_failure_time {
+  parameter wheels.
+  if not wheels:isType("list") { return get_field(wheels, FLD_WHEEL_FAILURE_TIME, 0). }
+  return list_max({parameter module. return get_field(module, FLD_WHEEL_FAILURE_TIME, 0). }, wheels, 0).
+}

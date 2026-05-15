@@ -15,7 +15,7 @@ function format_precision {
   parameter n.
   parameter precision.
   set n to round(n, precision):tostring():split(".").
-  if n:length = 0 { return n + "." + "":padright(precision):replace(" ", "0"). }
+  if n:length = 1 { return n[0] + "." + "":padright(precision):replace(" ", "0"). }
   return n[0] + "." + n[1]:padright(precision):replace(" ", "0").
 }
 
